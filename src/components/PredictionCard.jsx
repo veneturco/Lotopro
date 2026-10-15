@@ -5,6 +5,7 @@ import { ESTRATEGIAS } from "../utils/predictiveEngine";
 
 export default function PredictionCard({
   pronosticos = [],
+  proximoSorteoHora = "",
   estrategiaActual = "equilibrado",
   onCambiarEstrategia,
   efectividad = { tasaAcierto: 68.4 },
@@ -46,11 +47,18 @@ export default function PredictionCard({
             <Cpu className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-black tracking-tight text-neutral-900 dark:text-white uppercase">
-              Pronóstico del Sistema
-            </h3>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-sm font-black tracking-tight text-neutral-900 dark:text-white uppercase">
+                Pronóstico del Sistema
+              </h3>
+              {proximoSorteoHora && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black tracking-wide shadow-sm animate-pulse">
+                  PARA {proximoSorteoHora}
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-neutral-600 dark:text-neutral-400 font-medium">
-              Top 3 Probabilidad para el Próximo Sorteo
+              Top 3 Recomendados para la próxima jugada
             </p>
           </div>
         </div>

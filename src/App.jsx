@@ -22,6 +22,7 @@ import {
 } from "./utils/predictiveEngine";
 import { narrarResultado } from "./utils/speech";
 import { resolverAnimal } from "./constants/catalogo";
+import { obtenerMinutosDelDia, calcularTiempoProximoSorteo } from "./utils/schedule";
 import { WifiOff, PartyPopper } from "lucide-react";
 
 export default function App() {
@@ -83,17 +84,18 @@ export default function App() {
         setLoading(false);
         setError(null);
 
-        // Si llega un nuevo sorteo y la voz está habilitada, narrarlo automáticamente
+        // Si llega un nuevo sorteo y la voz está habilitada, narrar el más reciente cronológicamente
         if (data.length > 0) {
-          const primero = data[0];
-          const claveActual = `${primero.time_s}-${primero.name_animal || primero.numero}`;
+          const sorted = [...data].sort((a, b) => obtenerMinutosDelDia(b) - obtenerMinutosDelDia(a));
+          const masReciente = sorted[0];
+          const claveActual = `${masReciente.time_s}-${masReciente.name_animal || masReciente.numero}`;
           if (
             prevUltimoSorteoRef.current &&
             prevUltimoSorteoRef.current !== claveActual &&
             vozHabilitada
           ) {
-            const fig = resolverAnimal(primero);
-            narrarResultado(fig, primero.time_s);
+            const fig = resolverAnimal(masReciente);
+            narrarResultado(fig, masReciente.time_s);
           }
           prevUltimoSorteoRef.current = claveActual;
         }
@@ -122,12 +124,17 @@ export default function App() {
     if (!resultados || resultados.length === 0) return [];
 
     return [...resultados].sort((a, b) => {
-      const timeA = a?.time_schedule ? new Date(a.time_schedule).getTime() : 0;
-      const timeB = b?.time_schedule ? new Date(b.time_schedule).getTime() : 0;
-      if (timeA && timeB) return timeB - timeA;
+      const minA = obtenerMinutosDelDia(a);
+      const minB = obtenerMinutosDelDia(b);
+      if (minA !== minB) return minB - minA; // El de mayor hora va primero (más reciente arriba)
       return 0;
     });
   }, [resultados]);
+
+  // Información del próximo sorteo en base a la hora actual
+  const infoProximo = useMemo(() => {
+    return calcularTiempoProximoSorteo();
+  }, []);
 
   // 3. Pronóstico Estocástico reactivo
   const pronosticos = useMemo(() => {
@@ -214,6 +221,7 @@ export default function App() {
             {/* Sección Predictiva con Selector de Estrategia y Herramientas */}
             <PredictionCard
               pronosticos={pronosticos}
+              proximoSorteoHora={infoProximo?.proximoSorteo}
               estrategiaActual={estrategia}
               onCambiarEstrategia={setEstrategia}
               efectividad={efectividad}
