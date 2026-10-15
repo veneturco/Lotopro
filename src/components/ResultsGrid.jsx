@@ -1,0 +1,84 @@
+import React from "react";
+import { Clock } from "lucide-react";
+import AnimalAvatar from "./AnimalAvatar";
+import { resolverAnimal } from "../constants/catalogo";
+
+export default function ResultsGrid({ resultados = [] }) {
+  if (!resultados || resultados.length === 0) {
+    return (
+      <div className="text-center py-8 text-neutral-600 font-medium text-sm">
+        No hay sorteos registrados para el día de hoy.
+      </div>
+    );
+  }
+
+  // Estilos de los círculos con números flotantes
+  const colorBadgeStyles = {
+    rojo: "bg-rose-600 text-white border-rose-300 shadow-rose-900/30",
+    negro: "bg-neutral-900 text-white border-neutral-700 shadow-black/40",
+    azul: "bg-sky-600 text-white border-sky-300 shadow-sky-900/30"
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-800">
+          Sorteos del Día ({resultados.length})
+        </h3>
+        <span className="text-[11px] text-neutral-600 font-semibold">
+          Más reciente arriba
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3.5">
+        {resultados.map((item, index) => {
+          const animal = resolverAnimal(item);
+          const badgeColorClass =
+            colorBadgeStyles[animal?.color] || "bg-neutral-800 text-white";
+
+          return (
+            <div
+              key={`${item.time_schedule || item.time_s}-${index}`}
+              className="group relative flex flex-col items-center justify-between rounded-3xl bg-yellow-500 p-3.5 shadow-lg border-2 border-yellow-300/80 hover:bg-yellow-400 hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden"
+            >
+              {/* Círculo con el número flotando en la esquina superior izquierda */}
+              <div
+                className={`absolute top-2.5 left-2.5 z-20 w-8 h-8 rounded-full flex items-center justify-center font-black text-xs border shadow-md transform group-hover:scale-110 transition-transform ${badgeColorClass}`}
+              >
+                {animal?.numero ?? "??"}
+              </div>
+
+              {/* Hora flotando en la esquina superior derecha */}
+              <div className="absolute top-2.5 right-2.5 z-20 flex items-center space-x-1 px-2 py-0.5 rounded-full bg-black/25 backdrop-blur-sm text-white text-[10px] font-bold">
+                <Clock className="w-2.5 h-2.5" />
+                <span>{item.time_s || "Reciente"}</span>
+              </div>
+
+              {/* Espacio Central Grande (Placeholder para Render 3D Pixar) */}
+              <div className="my-5 w-full flex items-center justify-center">
+                <AnimalAvatar
+                  animal={animal}
+                  size="md"
+                  className="transform group-hover:scale-115 transition-transform duration-300"
+                />
+              </div>
+
+              {/* Nombre del animal debajo de la tarjeta */}
+              <div className="w-full text-center z-10">
+                <span className="block text-xs font-black uppercase tracking-wide text-neutral-900 drop-shadow-sm truncate">
+                  {animal?.animal || item?.name_animal || "Sorteo"}
+                </span>
+                <span className="text-[10px] capitalize font-bold text-neutral-700/80">
+                  {animal?.color}
+                </span>
+              </div>
+
+              {/* Efecto de brillo de fondo */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-white/20 pointer-events-none rounded-3xl"></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
