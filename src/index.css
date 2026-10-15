@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #f59e0b;
+    overflow-x: hidden;
+  }
+}
+
+/* Glassmorphism custom styling */
+.glass-container {
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* Suavizado de bordes y sombras */
+.shadow-premium {
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.15), 0 0 15px rgba(255, 255, 255, 0.3) inset;
+}
