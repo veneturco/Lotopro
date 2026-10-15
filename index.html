@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#F59E0B" />
     <meta name="description" content="LotoPro - Monitoreo de resultados en tiempo real y motor de pronóstico probabilístico para Loto Activo." />
+    <!-- PWA Manifest & Apple Touch Icon -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/mascota.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="LotoPro" />
+
     <title>LotoPro · Resultados en Vivo y Pronóstico Inteligente</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +21,15 @@
   </head>
   <body class="bg-amber-400 min-h-screen text-slate-800 antialiased selection:bg-amber-200 selection:text-amber-900 font-['Plus_Jakarta_Sans',sans-serif]">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.log('SW registration skipped:', err);
+          });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
