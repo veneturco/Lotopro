@@ -94,8 +94,8 @@ export default function PredictionCard({
         </div>
       </div>
 
-      {/* Lista del Top 3 */}
-      <div className="space-y-2.5">
+      {/* Lista del Top 3 con Rayo de Luz Recorriendo el Borde (Border Beam) */}
+      <div className="space-y-3">
         {pronosticos.map((item, idx) => {
           const medal = medalStyles[idx] || medalStyles[2];
           const tagClass = tagStyles[item.etiqueta] || tagStyles.Estable;
@@ -103,56 +103,61 @@ export default function PredictionCard({
           return (
             <div
               key={item.numero}
-              className="relative overflow-hidden rounded-2xl bg-white/95 dark:bg-neutral-900 p-3 shadow-sm border border-white dark:border-neutral-800 hover:shadow-md transition-all duration-200"
+              className="border-beam-glow p-[2px] transition-all duration-300 hover:scale-[1.015] shadow-lg shadow-amber-500/10"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+              <div className="border-beam-inner p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shadow-md ${medal}`}
+                    >
+                      #{item.posicion}
+                    </div>
+
+                    {/* Contenedor del animal con bordes suaves curvados */}
+                    <div className="p-1.5 rounded-2xl bg-amber-500/10 dark:bg-amber-400/5 border border-amber-300/40 dark:border-amber-500/20 backdrop-blur-sm">
+                      <AnimalAvatar animal={item} size="sm" />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <h4 className="font-bold text-neutral-900 dark:text-white text-sm">
+                          {item.animal}
+                        </h4>
+                        <span className="text-xs font-black px-1.5 py-0.2 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700">
+                          N° {item.numero}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2 mt-0.5">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.2 rounded-full border ${tagClass}`}
+                        >
+                          {tagIcons[item.etiqueta]}
+                          {item.etiqueta}
+                        </span>
+                        <span className="text-[10px] capitalize text-neutral-500 dark:text-neutral-400 font-medium">
+                          Color {item.color}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-sm font-black text-amber-600 dark:text-amber-400">
+                      {item.score}%
+                    </div>
+                    <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold block">
+                      Score
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 w-full bg-neutral-100 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
                   <div
-                    className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shadow-md ${medal}`}
-                  >
-                    #{item.posicion}
-                  </div>
-
-                  <AnimalAvatar animal={item} size="sm" />
-
-                  <div>
-                    <div className="flex items-center space-x-1.5">
-                      <h4 className="font-bold text-neutral-900 dark:text-white text-sm">
-                        {item.animal}
-                      </h4>
-                      <span className="text-xs font-black px-1.5 py-0.2 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700">
-                        N° {item.numero}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2 mt-0.5">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.2 rounded-full border ${tagClass}`}
-                      >
-                        {tagIcons[item.etiqueta]}
-                        {item.etiqueta}
-                      </span>
-                      <span className="text-[10px] capitalize text-neutral-500 dark:text-neutral-400 font-medium">
-                        Color {item.color}
-                      </span>
-                    </div>
-                  </div>
+                    className="h-full rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-rose-500 transition-all duration-500"
+                    style={{ width: `${Math.min(100, item.score)}%` }}
+                  ></div>
                 </div>
-
-                <div className="text-right">
-                  <div className="text-sm font-black text-amber-600 dark:text-amber-400">
-                    {item.score}%
-                  </div>
-                  <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-bold block">
-                    Score
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-2.5 w-full bg-neutral-100 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-rose-500 transition-all duration-500"
-                  style={{ width: `${Math.min(100, item.score)}%` }}
-                ></div>
               </div>
             </div>
           );

@@ -54,13 +54,14 @@ export default function ResultsGrid({ resultados = [] }) {
                 <span>{item.time_s || "Reciente"}</span>
               </div>
 
-              {/* Espacio Central Grande (Placeholder para Render 3D Pixar) */}
-              <div className="my-5 w-full flex items-center justify-center">
-                <AnimalAvatar
-                  animal={animal}
-                  size="md"
-                  className="transform group-hover:scale-115 transition-transform duration-300"
-                />
+              {/* Espacio Central Grande con Podio de Bordes Suaves y Luz Difusa */}
+              <div className="my-3.5 w-full flex items-center justify-center">
+                <div className="animal-podium p-3 w-28 h-28 flex items-center justify-center transform group-hover:scale-105 transition-all duration-300">
+                  <AnimalAvatar
+                    animal={animal}
+                    size="md"
+                  />
+                </div>
               </div>
 
               {/* Nombre del animal debajo de la tarjeta */}
