@@ -88,15 +88,15 @@ export function calcularTiempoProximoSorteo(fechaReferencia = new Date()) {
     }
   }
 
-  // Si ya pasaron las 7:00 PM, el próximo es mañana a las 9:00 AM
-  const segundosSorteoManana = 9 * 3600;
+  // Si ya pasaron las 7:00 PM, el próximo es mañana a las 8:00 AM
+  const segundosSorteoManana = 8 * 3600;
   const segundosHastaMedianoche = 86400 - segundosDesdeMedianoche;
   const diffSegundos = segundosHastaMedianoche + segundosSorteoManana;
   const minutos = Math.floor(diffSegundos / 60);
   const segundos = diffSegundos % 60;
 
   return {
-    proximoSorteo: "09:00 AM (Mañana)",
+    proximoSorteo: "08:00 AM (Mañana)",
     minutos,
     segundos,
     totalSegundos: diffSegundos,

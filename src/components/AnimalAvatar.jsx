@@ -23,13 +23,10 @@ export default function AnimalAvatar({ animal, size = "md", className = "" }) {
 
   return (
     <div
-      className={`relative flex items-center justify-center rounded-2xl select-none ${currentSize} ${className}`}
+      className={`relative flex items-center justify-center select-none ${currentSize} ${className}`}
     >
-      {/* Fondo volumétrico con iluminación 3D y brillo de cristal */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/40 via-amber-200/30 to-amber-600/30 dark:from-white/10 dark:via-neutral-800/40 dark:to-neutral-900/40 backdrop-blur-md border border-white/60 dark:border-white/20 shadow-[inset_0_2px_8px_rgba(255,255,255,0.7),0_8px_20px_rgba(0,0,0,0.12)]"></div>
-
-      {/* Sombra de suelo */}
-      <div className="absolute -bottom-1 w-3/4 h-2 bg-black/20 rounded-full blur-sm"></div>
+      {/* Sombra de suelo realista para el personaje 3D */}
+      <div className="absolute -bottom-1 w-3/4 h-2.5 bg-black/25 rounded-full blur-sm"></div>
 
       {/* Imagen 3D Pixar Real con Fallback al Emoji Volumétrico */}
       {imageSrc && !imgError ? (
@@ -37,7 +34,7 @@ export default function AnimalAvatar({ animal, size = "md", className = "" }) {
           src={imageSrc}
           alt={animal?.animal || "Animal 3D"}
           onError={() => setImgError(true)}
-          className="relative z-10 w-full h-full object-contain p-1 filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)] transform transition-transform duration-300 hover:scale-110"
+          className="relative z-10 w-full h-full object-contain filter drop-shadow-[0_6px_12px_rgba(0,0,0,0.35)] transform transition-transform duration-300 hover:scale-110"
           loading="lazy"
         />
       ) : (
