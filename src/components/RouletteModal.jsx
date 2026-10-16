@@ -61,7 +61,7 @@ export default function RouletteModal({ isOpen, onClose, pronosticos = [] }) {
     if (seleccionados.length === 0) return;
     const texto = `🎰 *LotoPro · Ruleta de la Suerte*\n🐶 *La Mascota eligió esta jugada para hoy:*\n\n${seleccionados
       .map((a, i) => `${i + 1}️⃣ *N° ${a.numero} - ${a.animal}* ${a.emoji || ""}`)
-      .join("\n")}\n\n👉 *Juega en vivo:* http://localhost:3000`;
+      .join("\n")}\n\n👉 *Juega en vivo:* https://lotoproactivo.vercel.app`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`, "_blank");
   };
 

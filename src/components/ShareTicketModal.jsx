@@ -19,7 +19,7 @@ export default function ShareTicketModal({ isOpen, onClose, pronosticos = [], es
       (p, i) =>
         `${i + 1}️⃣ *N° ${p.numero} - ${p.animal}* ${p.emoji} (${p.score}% calor · ${p.etiqueta})`
     )
-    .join("\n")}\n\n👉 *Consulta en vivo:* http://localhost:3000`;
+    .join("\n")}\n\n👉 *Consulta en vivo:* https://lotoproactivo.vercel.app`;
 
   const handleCopiar = () => {
     navigator.clipboard.writeText(textoCompartir);

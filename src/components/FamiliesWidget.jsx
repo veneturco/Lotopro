@@ -74,30 +74,51 @@ export default function FamiliesWidget({ resultados = [] }) {
         )}
       </div>
 
-      {/* Tarjetas de Familias */}
-      <div className="grid grid-cols-5 gap-1.5 pt-1">
+      {/* Tarjetas de Familias con Iconos y Diseño de Alta Calidad */}
+      <div className="grid grid-cols-5 gap-2 pt-1">
         {estadisticas.lista.map((fam) => {
           const esLider = fam.nombre === estadisticas.dominante.nombre && fam.cantidad > 0;
           return (
             <div
               key={fam.id}
-              className={`flex flex-col items-center justify-center p-2 rounded-2xl border text-center transition-all ${
+              className={`relative flex flex-col items-center justify-between p-2 rounded-2xl border text-center transition-all duration-300 ${
                 esLider
-                  ? "bg-amber-500/20 dark:bg-amber-500/20 border-amber-500/50 shadow-sm scale-102"
-                  : "bg-white/80 dark:bg-neutral-800/60 border-neutral-200/80 dark:border-neutral-700/80"
+                  ? "bg-gradient-to-b from-amber-400/25 to-yellow-500/15 border-amber-400 shadow-md scale-105 ring-2 ring-amber-400/30"
+                  : "bg-white/90 dark:bg-neutral-800/80 border-neutral-200/90 dark:border-neutral-700/80 hover:border-amber-300"
               }`}
             >
-              <span className="text-xl select-none">{fam.emoji}</span>
-              <span className="text-[10px] font-black text-neutral-800 dark:text-neutral-200 truncate w-full mt-1">
-                {fam.id}
-              </span>
-              <span
-                className={`text-[11px] font-black mt-0.5 ${
-                  esLider ? "text-amber-600 dark:text-amber-400" : "text-neutral-500 dark:text-neutral-400"
+              {esLider && (
+                <div className="absolute -top-2 px-1.5 py-0.2 rounded-full bg-amber-500 text-neutral-950 text-[8px] font-black uppercase tracking-wider shadow-sm">
+                  Top
+                </div>
+              )}
+
+              {/* Insignia con el emoji estilizado y efecto de profundidad */}
+              <div
+                className={`w-9 h-9 rounded-2xl flex items-center justify-center text-xl shadow-sm ${
+                  esLider
+                    ? "bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-amber-500/40 text-neutral-950"
+                    : "bg-neutral-100 dark:bg-neutral-700/60 shadow-inner"
                 }`}
               >
-                {fam.cantidad} <span className="text-[9px] font-normal">veces</span>
+                <span className="filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)] transform transition-transform hover:scale-125">
+                  {fam.emoji}
+                </span>
+              </div>
+
+              <span className="text-[10px] font-extrabold text-neutral-800 dark:text-neutral-100 truncate w-full mt-1.5 tracking-tight">
+                {fam.id}
               </span>
+
+              <div
+                className={`mt-1 px-1.5 py-0.5 rounded-lg w-full text-[10px] font-black ${
+                  esLider
+                    ? "bg-amber-500 text-neutral-950 shadow-sm"
+                    : "bg-neutral-100 dark:bg-neutral-700/50 text-neutral-600 dark:text-neutral-300"
+                }`}
+              >
+                {fam.cantidad}
+              </div>
             </div>
           );
         })}

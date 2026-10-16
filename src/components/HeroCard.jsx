@@ -4,7 +4,7 @@ import AnimalAvatar from "./AnimalAvatar";
 import { resolverAnimal } from "../constants/catalogo";
 import { narrarResultado } from "../utils/speech";
 
-export default function HeroCard({ resultado }) {
+export default function HeroCard({ resultado, esCierreAnterior = false }) {
   const [narrando, setNarrando] = useState(false);
 
   if (!resultado) return null;
@@ -33,7 +33,7 @@ export default function HeroCard({ resultado }) {
       <div className="relative z-10 flex items-center justify-between pb-3 border-b border-neutral-800/80">
         <div className="flex items-center space-x-1.5 text-xs font-semibold uppercase tracking-wider text-amber-400">
           <ShieldCheck className="w-4 h-4 text-amber-400" />
-          <span>Último Sorteo Oficial</span>
+          <span>{esCierreAnterior ? "Último Cierre Registrado" : "Último Sorteo Oficial"}</span>
         </div>
 
         <div className="flex items-center space-x-1.5">

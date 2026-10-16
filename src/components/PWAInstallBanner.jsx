@@ -4,8 +4,24 @@ import { Download, X, Sparkles } from "lucide-react";
 export default function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [visible, setVisible] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    // Si ya está ejecutándose como PWA instalada, no mostrar banner
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone) return;
+
+    // Detectar iOS Safari (no soporta beforeinstallprompt nativo)
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+    if (isIosDevice) {
+      setIsIOS(true);
+      const dismissed = localStorage.getItem('lotopro_pwa_ios_dismissed');
+      if (!dismissed) {
+        setVisible(true);
+      }
+    }
+
     const handler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -18,13 +34,28 @@ export default function PWAInstallBanner() {
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
+    if (isIOS) {
+      alert("Para instalar en iPhone/iPad:\n1. Toca el botón 'Compartir' (cuadrado con flecha hacia arriba) en Safari.\n2. Selecciona 'Agregar a la pantalla de inicio'.");
+      return;
+    }
+
+    if (!deferredPrompt) {
+      alert("Para instalar en Chrome / Edge: Haz clic en el icono de instalación en la barra de direcciones arriba (junto a la estrella de favoritos).");
+      return;
+    }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === "accepted") {
       setVisible(false);
     }
     setDeferredPrompt(null);
+  };
+
+  const handleClose = () => {
+    if (isIOS) {
+      localStorage.setItem('lotopro_pwa_ios_dismissed', 'true');
+    }
+    setVisible(false);
   };
 
   if (!visible) return null;
@@ -51,7 +82,7 @@ export default function PWAInstallBanner() {
             <span>Instalar</span>
           </button>
           <button
-            onClick={() => setVisible(false)}
+            onClick={handleClose}
             className="p-1.5 rounded-lg text-neutral-400 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />

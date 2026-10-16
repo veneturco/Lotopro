@@ -6,8 +6,16 @@ import { resolverAnimal } from "../constants/catalogo";
 export default function ResultsGrid({ resultados = [] }) {
   if (!resultados || resultados.length === 0) {
     return (
-      <div className="text-center py-8 text-neutral-600 font-medium text-sm">
-        No hay sorteos registrados para el día de hoy.
+      <div className="rounded-3xl bg-white/40 dark:bg-neutral-900/50 border border-white/50 dark:border-neutral-800 p-6 text-center space-y-2.5 backdrop-blur-md shadow-lg">
+        <div className="inline-flex p-3 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+          <Clock className="w-6 h-6 animate-pulse" />
+        </div>
+        <h4 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+          Esperando el 1.er Sorteo Oficial de Hoy
+        </h4>
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-xs mx-auto leading-relaxed">
+          La jornada abre con el sorteo de las <strong className="text-neutral-800 dark:text-neutral-200 font-extrabold">08:00 AM</strong>. Consulta el pronóstico del sistema arriba para armar tu jugada.
+        </p>
       </div>
     );
   }
@@ -54,13 +62,14 @@ export default function ResultsGrid({ resultados = [] }) {
                 <span>{item.time_s || "Reciente"}</span>
               </div>
 
-              {/* Espacio Central Grande (Placeholder para Render 3D Pixar) */}
-              <div className="my-5 w-full flex items-center justify-center">
-                <AnimalAvatar
-                  animal={animal}
-                  size="md"
-                  className="transform group-hover:scale-115 transition-transform duration-300"
-                />
+              {/* Espacio Central Grande con Podio de Bordes Suaves y Luz Difusa */}
+              <div className="my-3.5 w-full flex items-center justify-center">
+                <div className="animal-podium p-3 w-28 h-28 flex items-center justify-center transform group-hover:scale-105 transition-all duration-300">
+                  <AnimalAvatar
+                    animal={animal}
+                    size="md"
+                  />
+                </div>
               </div>
 
               {/* Nombre del animal debajo de la tarjeta */}
