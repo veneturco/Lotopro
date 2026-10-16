@@ -6,8 +6,16 @@ import { resolverAnimal } from "../constants/catalogo";
 export default function ResultsGrid({ resultados = [] }) {
   if (!resultados || resultados.length === 0) {
     return (
-      <div className="text-center py-8 text-neutral-600 font-medium text-sm">
-        No hay sorteos registrados para el día de hoy.
+      <div className="rounded-3xl bg-white/40 dark:bg-neutral-900/50 border border-white/50 dark:border-neutral-800 p-6 text-center space-y-2.5 backdrop-blur-md shadow-lg">
+        <div className="inline-flex p-3 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+          <Clock className="w-6 h-6 animate-pulse" />
+        </div>
+        <h4 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+          Esperando el 1.er Sorteo Oficial de Hoy
+        </h4>
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-xs mx-auto leading-relaxed">
+          La jornada abre con el sorteo de las <strong className="text-neutral-800 dark:text-neutral-200 font-extrabold">08:00 AM</strong>. Consulta el pronóstico del sistema arriba para armar tu jugada.
+        </p>
       </div>
     );
   }

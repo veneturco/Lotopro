@@ -9,6 +9,7 @@ export default function PredictionCard({
   estrategiaActual = "equilibrado",
   onCambiarEstrategia,
   efectividad = { tasaAcierto: 68.4 },
+  esAperturaMatutina = false,
   onAbrirHeatmap,
   onAbrirShare,
   onAbrirCalculadora,
@@ -49,7 +50,7 @@ export default function PredictionCard({
           <div>
             <div className="flex items-center space-x-2">
               <h3 className="text-sm font-black tracking-tight text-neutral-900 dark:text-white uppercase">
-                Pronóstico del Sistema
+                {esAperturaMatutina ? "Pronóstico de Apertura" : "Pronóstico del Sistema"}
               </h3>
               {proximoSorteoHora && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black tracking-wide shadow-sm animate-pulse">
@@ -58,7 +59,9 @@ export default function PredictionCard({
               )}
             </div>
             <p className="text-[11px] text-neutral-600 dark:text-neutral-400 font-medium">
-              Top 3 Recomendados para la próxima jugada
+              {esAperturaMatutina
+                ? "Sugerencias del motor estocástico para abrir la jornada"
+                : "Top 3 Recomendados para la próxima jugada"}
             </p>
           </div>
         </div>

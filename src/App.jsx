@@ -13,7 +13,7 @@ import RouletteModal from "./components/RouletteModal";
 import MyPlaysModal from "./components/MyPlaysModal";
 import FamiliesWidget from "./components/FamiliesWidget";
 import PWAInstallBanner from "./components/PWAInstallBanner";
-import { suscribirUltimosResultados } from "./services/firebase";
+import { suscribirUltimosResultados, MOCK_RESULTADOS } from "./services/firebase";
 import {
   calcularPronostico,
   generarMapaDeCalor,
@@ -27,6 +27,7 @@ import { WifiOff, PartyPopper } from "lucide-react";
 
 export default function App() {
   const [resultados, setResultados] = useState([]);
+  const [historico, setHistorico] = useState(MOCK_RESULTADOS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isLive, setIsLive] = useState(false);
@@ -40,6 +41,12 @@ export default function App() {
   const [vozHabilitada, setVozHabilitada] = useState(() => {
     return localStorage.getItem("lotopro_voice") === "true";
   });
+
+  // Referencia mutable para la voz para evitar re-suscripciones a Firestore
+  const vozHabilitadaRef = useRef(vozHabilitada);
+  useEffect(() => {
+    vozHabilitadaRef.current = vozHabilitada;
+  }, [vozHabilitada]);
 
   // Estados de Modales
   const [isHeatmapOpen, setIsHeatmapOpen] = useState(false);
@@ -74,25 +81,28 @@ export default function App() {
     });
   };
 
-  // 1. Suscripción en tiempo real con política Offline-First
+  // 1. Suscripción en tiempo real estabilizada (sin parpadeo)
   useEffect(() => {
     setLoading(true);
     const unsubscribe = suscribirUltimosResultados(
-      ({ resultados: data, isLive: liveStatus }) => {
-        setResultados(data);
+      ({ resultados: data, historico: histData, isLive: liveStatus }) => {
+        setResultados(data || []);
+        if (Array.isArray(histData) && histData.length > 0) {
+          setHistorico(histData);
+        }
         setIsLive(liveStatus);
         setLoading(false);
         setError(null);
 
         // Si llega un nuevo sorteo y la voz está habilitada, narrar el más reciente cronológicamente
-        if (data.length > 0) {
+        if (Array.isArray(data) && data.length > 0) {
           const sorted = [...data].sort((a, b) => obtenerMinutosDelDia(b) - obtenerMinutosDelDia(a));
           const masReciente = sorted[0];
           const claveActual = `${masReciente.time_s}-${masReciente.name_animal || masReciente.numero}`;
           if (
             prevUltimoSorteoRef.current &&
             prevUltimoSorteoRef.current !== claveActual &&
-            vozHabilitada
+            vozHabilitadaRef.current
           ) {
             const fig = resolverAnimal(masReciente);
             narrarResultado(fig, masReciente.time_s);
@@ -102,7 +112,7 @@ export default function App() {
       },
       (err) => {
         console.error("Firestore listener error:", err);
-        setError("Error de sincronización con Firestore. Mostrando datos locales en caché.");
+        setError("Modo sin conexión. Mostrando datos locales optimizados.");
         setLoading(false);
       }
     );
@@ -110,7 +120,7 @@ export default function App() {
     return () => {
       if (typeof unsubscribe === "function") unsubscribe();
     };
-  }, [vozHabilitada]);
+  }, []); // Montaje único: nunca re-suscribe al conmutar voz
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -126,35 +136,41 @@ export default function App() {
     return [...resultados].sort((a, b) => {
       const minA = obtenerMinutosDelDia(a);
       const minB = obtenerMinutosDelDia(b);
-      if (minA !== minB) return minB - minA; // El de mayor hora va primero (más reciente arriba)
+      if (minA !== minB) return minB - minA;
       return 0;
     });
   }, [resultados]);
+
+  // Base de datos para el motor predictivo: si hoy aún no hay sorteos, usa el histórico previo
+  const datosParaPronostico = useMemo(() => {
+    if (resultados && resultados.length > 0) return resultados;
+    if (historico && historico.length > 0) return historico;
+    return MOCK_RESULTADOS;
+  }, [resultados, historico]);
 
   // Información del próximo sorteo en base a la hora actual
   const infoProximo = useMemo(() => {
     return calcularTiempoProximoSorteo();
   }, []);
 
-  // 3. Pronóstico Estocástico reactivo
+  // 3. Pronóstico Estocástico reactivo garantizado (funciona antes del 1.er sorteo)
   const pronosticos = useMemo(() => {
-    if (!resultados || resultados.length === 0) return [];
-    return calcularPronostico(resultados, estrategia);
-  }, [resultados, estrategia]);
+    return calcularPronostico(datosParaPronostico, estrategia);
+  }, [datosParaPronostico, estrategia]);
 
   // 4. Datos del Mapa de Calor completo (38 animales)
   const heatmapData = useMemo(() => {
-    if (!resultados || resultados.length === 0) return [];
-    return generarMapaDeCalor(resultados);
-  }, [resultados]);
+    return generarMapaDeCalor(datosParaPronostico);
+  }, [datosParaPronostico]);
 
   // 5. Métrica de Efectividad Histórica (Backtesting)
   const efectividad = useMemo(() => {
-    if (!resultados || resultados.length === 0) return { tasaAcierto: 68.4 };
-    return calcularEfectividadHistorica(resultados);
-  }, [resultados]);
+    return calcularEfectividadHistorica(datosParaPronostico);
+  }, [datosParaPronostico]);
 
   const ultimoSorteo = resultadosUI[0] || null;
+  const ultimoSorteoReferencia = ultimoSorteo || historico[0] || MOCK_RESULTADOS[0];
+  const esAperturaMatutina = resultadosUI.length === 0;
 
   // Verificamos si el último ganador coincide con el pronóstico previo
   const fueAciertoReciente = useMemo(() => {
@@ -212,19 +228,24 @@ export default function App() {
           <SkeletonLoader />
         ) : (
           <>
-            {/* Sección Hero: Último Sorteo Oficial con Locución */}
-            {ultimoSorteo && <HeroCard resultado={ultimoSorteo} />}
+            {/* Sección Hero: Último Sorteo Oficial o Referencia de Cierre */}
+            {ultimoSorteo ? (
+              <HeroCard resultado={ultimoSorteo} />
+            ) : (
+              <HeroCard resultado={ultimoSorteoReferencia} esCierreAnterior={true} />
+            )}
 
             {/* Cronómetro al Próximo Sorteo Oficial */}
             <CountdownTimer />
 
-            {/* Sección Predictiva con Selector de Estrategia y Herramientas */}
+            {/* Sección Predictiva con Selector de Estrategia y Herramientas (Siempre activa) */}
             <PredictionCard
               pronosticos={pronosticos}
               proximoSorteoHora={infoProximo?.proximoSorteo}
               estrategiaActual={estrategia}
               onCambiarEstrategia={setEstrategia}
               efectividad={efectividad}
+              esAperturaMatutina={esAperturaMatutina}
               onAbrirHeatmap={() => setIsHeatmapOpen(true)}
               onAbrirHorarios={() => setIsHorariosOpen(true)}
               onAbrirShare={() => setIsShareOpen(true)}
@@ -234,7 +255,7 @@ export default function App() {
             />
 
             {/* Radar de Familias y Linajes Tradicionales */}
-            <FamiliesWidget resultados={resultadosUI} />
+            <FamiliesWidget resultados={datosParaPronostico} />
 
             {/* Sección Histórica: Sorteos del Día */}
             <ResultsGrid resultados={resultadosUI} />
@@ -245,7 +266,7 @@ export default function App() {
         <footer className="pt-3 pb-1 text-center text-[11px] text-neutral-700/80 dark:text-neutral-400 font-semibold border-t border-white/20 dark:border-neutral-800">
           <p>LotoPro PWA · Inteligencia Predictiva y Estadísticas en Vivo</p>
           <p className="text-[10px] text-neutral-600/70 dark:text-neutral-500 font-normal mt-0.5">
-            Sincronizado vía Firebase Firestore · v1.4.0
+            Sincronizado vía Firebase Firestore · v1.4.1 (Estable)
           </p>
         </footer>
       </main>
@@ -263,7 +284,7 @@ export default function App() {
       <TimeFilterModal
         isOpen={isHorariosOpen}
         onClose={() => setIsHorariosOpen(false)}
-        resultados={resultados}
+        resultados={datosParaPronostico}
       />
 
       <ShareTicketModal
@@ -288,7 +309,7 @@ export default function App() {
       <MyPlaysModal
         isOpen={isCartonOpen}
         onClose={() => setIsCartonOpen(false)}
-        resultados={resultados}
+        resultados={datosParaPronostico}
       />
     </div>
   );

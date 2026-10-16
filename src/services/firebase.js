@@ -14,7 +14,7 @@ const firebaseConfig = {
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getFirestore(app);
 
-const CACHE_KEY = "lotopro_offline_cache_v1";
+const CACHE_KEY_V2 = "lotopro_offline_cache_v2";
 
 export const MOCK_RESULTADOS = [
   { name_animal: "Jirafa", numero: "35", time_s: "07:00 PM", time_schedule: "2026-10-14 19:00:00" },
@@ -28,41 +28,83 @@ export const MOCK_RESULTADOS = [
   { name_animal: "Águila", numero: "9", time_s: "09:00 AM", time_schedule: "2026-10-14 09:00:00" }
 ];
 
+export function obtenerFechaHoyString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function obtenerDeCacheLocal() {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(CACHE_KEY_V2);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (parsed && typeof parsed === "object") {
         return parsed;
       }
     }
   } catch (e) {
-    console.warn("No se pudo leer el caché local", e);
+    console.warn("No se pudo leer el caché local v2", e);
   }
   return null;
 }
 
-export function guardarEnCacheLocal(datos) {
+export function guardarEnCacheLocal(cacheData) {
   try {
-    if (Array.isArray(datos) && datos.length > 0) {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(datos));
+    if (cacheData && typeof cacheData === "object") {
+      localStorage.setItem(CACHE_KEY_V2, JSON.stringify(cacheData));
     }
   } catch (e) {
-    console.warn("No se pudo guardar en el caché local", e);
+    console.warn("No se pudo guardar en el caché local v2", e);
   }
 }
 
 /**
- * Suscripción con política "Cache-First & Live-Sync"
+ * Suscripción con política "Date-Aware Cache & Smooth Sync"
+ * Evita el parpadeo de datos viejos de ayer contra listas vacías de hoy.
  */
 export function suscribirUltimosResultados(onUpdate, onError) {
-  // 1. Emitir inmediatamente el caché offline si existe
-  const enCache = obtenerDeCacheLocal();
-  if (enCache) {
-    onUpdate({ resultados: enCache, isLive: false, source: "offline_cache" });
+  const hoy = obtenerFechaHoyString();
+  const cache = obtenerDeCacheLocal();
+
+  // 1. Emisión inicial controlada (sin parpadeo)
+  if (cache) {
+    if (cache.fecha === hoy && Array.isArray(cache.resultadosHoy)) {
+      // El caché pertenece al día de hoy
+      onUpdate({
+        resultados: cache.resultadosHoy,
+        historico: (cache.historicoReciente && cache.historicoReciente.length > 0)
+          ? cache.historicoReciente
+          : (cache.resultadosHoy.length > 0 ? cache.resultadosHoy : MOCK_RESULTADOS),
+        isLive: false,
+        source: "cache_today"
+      });
+    } else {
+      // El caché es de ayer o previo: hoy arranca vacío, pero preservamos el histórico previo para el pronóstico matutino
+      const prevDraws = (cache.resultadosHoy && cache.resultadosHoy.length > 0)
+        ? cache.resultadosHoy
+        : (cache.historicoReciente || MOCK_RESULTADOS);
+
+      onUpdate({
+        resultados: [],
+        historico: prevDraws,
+        isLive: false,
+        source: "cache_previous_day"
+      });
+    }
+  } else {
+    // Primera carga sin caché previo
+    onUpdate({
+      resultados: [],
+      historico: MOCK_RESULTADOS,
+      isLive: false,
+      source: "initial_empty"
+    });
   }
 
+  // 2. Conexión en tiempo real con Firestore
   try {
     const docRef = doc(db, "stats", "latest");
     return onSnapshot(
@@ -71,26 +113,67 @@ export function suscribirUltimosResultados(onUpdate, onError) {
         if (snapshot.exists()) {
           const data = snapshot.data();
           const list = Array.isArray(data?.resultados) ? data.resultados : [];
-          guardarEnCacheLocal(list);
-          onUpdate({ resultados: list, isLive: true, source: "firestore" });
+
+          // Preservar el histórico de referencia para el pronóstico
+          const cacheActual = obtenerDeCacheLocal();
+          let baseHistorica = MOCK_RESULTADOS;
+
+          if (list.length > 0) {
+            baseHistorica = list;
+          } else if (cacheActual?.resultadosHoy?.length > 0 && cacheActual.fecha !== hoy) {
+            baseHistorica = cacheActual.resultadosHoy;
+          } else if (cacheActual?.historicoReciente?.length > 0) {
+            baseHistorica = cacheActual.historicoReciente;
+          }
+
+          // Guardar estado consolidado del día
+          guardarEnCacheLocal({
+            fecha: hoy,
+            resultadosHoy: list,
+            historicoReciente: baseHistorica
+          });
+
+          onUpdate({
+            resultados: list,
+            historico: baseHistorica,
+            isLive: true,
+            source: "firestore"
+          });
         } else {
-          console.warn("Documento 'stats/latest' no existe aún. Usando dataset mock.");
-          const fallback = enCache || MOCK_RESULTADOS;
-          onUpdate({ resultados: fallback, isLive: false, source: "mock_initial" });
+          console.warn("Documento 'stats/latest' no existe aún. Usando histórico de respaldo.");
+          const cacheActual = obtenerDeCacheLocal();
+          const hist = cacheActual?.historicoReciente || MOCK_RESULTADOS;
+          onUpdate({
+            resultados: [],
+            historico: hist,
+            isLive: false,
+            source: "firestore_not_found"
+          });
         }
       },
       (error) => {
         console.error("Error en conexión Firestore:", error);
         if (onError) onError(error);
-        const fallback = enCache || MOCK_RESULTADOS;
-        onUpdate({ resultados: fallback, isLive: false, source: "mock_error" });
+        const cacheActual = obtenerDeCacheLocal();
+        const hist = cacheActual?.historicoReciente || MOCK_RESULTADOS;
+        onUpdate({
+          resultados: cacheActual?.resultadosHoy || [],
+          historico: hist,
+          isLive: false,
+          source: "firestore_error"
+        });
       }
     );
   } catch (err) {
     console.error("Excepción al suscribir a Firestore:", err);
     if (onError) onError(err);
-    const fallback = enCache || MOCK_RESULTADOS;
-    onUpdate({ resultados: fallback, isLive: false, source: "mock_error" });
+    const cacheActual = obtenerDeCacheLocal();
+    onUpdate({
+      resultados: cacheActual?.resultadosHoy || [],
+      historico: cacheActual?.historicoReciente || MOCK_RESULTADOS,
+      isLive: false,
+      source: "exception"
+    });
     return () => {};
   }
 }
