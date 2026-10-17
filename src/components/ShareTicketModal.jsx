@@ -35,6 +35,24 @@ export default function ShareTicketModal({
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  const handleCompartirNativo = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "LotoPro · Pronóstico VIP",
+          text: textoCompartir,
+          url: "https://lotoproactivo.vercel.app"
+        });
+        return;
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.log("Web Share falló o cancelado", err);
+        }
+      }
+    }
+    handleCopiar();
+  };
+
   const handleWhatsApp = () => {
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(textoCompartir)}`;
     window.open(url, "_blank");
@@ -275,6 +293,16 @@ export default function ShareTicketModal({
               <span>{generandoImagen ? "Generando..." : "Imagen HD"}</span>
             </button>
           </div>
+
+          {typeof navigator !== "undefined" && !!navigator.share && (
+            <button
+              onClick={handleCompartirNativo}
+              className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-blue-500/20 transition-all active:scale-95"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Compartir en Redes / Estados</span>
+            </button>
+          )}
 
           <button
             onClick={handleCopiar}
