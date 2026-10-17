@@ -123,9 +123,9 @@ export default function PredictionCard({
 
         {/* Semáforo de Entropía de Shannon & Último Bingo */}
         <div className="flex items-center justify-between gap-1.5 pt-1 text-[10.5px]">
-          <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-xl border font-bold ${entropiaColores[semaforoEntropia?.nivel || "AMARILLO"]}`}>
+          <div className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-xl border font-bold ${entropiaColores[semaforoEntropia?.estado || semaforoEntropia?.nivel || "AMARILLO"]}`}>
             <Activity className="w-3 h-3 shrink-0" />
-            <span className="truncate">{semaforoEntropia?.label || "Baja Volatilidad"}</span>
+            <span className="truncate">{semaforoEntropia?.mensaje || semaforoEntropia?.label || "Baja Volatilidad"}</span>
           </div>
 
           {auditoria24h?.ultimoBingo && (

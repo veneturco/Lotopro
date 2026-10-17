@@ -22,7 +22,7 @@ export default function ShareTicketModal({
     day: "numeric"
   });
 
-  const textoCompartir = `🎰 *LotoPro · Pronóstico Táctico VIP*\n📅 ${fechaHoy}\n🧠 *Estrategia:* ${estrategiaNombre}\n📊 *Volatilidad:* ${semaforoEntropia.label}\n\n*Top 3 Táctico para la próxima jugada:*\n${pronosticos
+  const textoCompartir = `🎰 *LotoPro · Pronóstico Táctico VIP*\n📅 ${fechaHoy}\n🧠 *Estrategia:* ${estrategiaNombre}\n📊 *Volatilidad:* ${semaforoEntropia?.mensaje || semaforoEntropia?.label || "Normal"}\n\n*Top 3 Táctico para la próxima jugada:*\n${pronosticos
     .map(
       (p) =>
         `${p.rolTactico === "FIJO" ? "🎯" : p.rolTactico === "DEFENSA" ? "🛡️" : "💣"} *[${p.rolTactico}] N° ${p.numero} - ${p.animal}* ${p.emoji}\n   └ Score: ${p.score}% · ${p.motivo} (Banca: ${p.sugerenciaBancaPct || 33}%)`
@@ -104,7 +104,8 @@ export default function ShareTicketModal({
 
     ctx.fillStyle = "#38bdf8";
     ctx.font = "bold 28px system-ui, -apple-system, sans-serif";
-    ctx.fillText(`📊 VOLATILIDAD: ${semaforoEntropia.label.toUpperCase()}`, 540, 365);
+    const volTexto = (semaforoEntropia?.mensaje || semaforoEntropia?.label || "NORMAL").toUpperCase();
+    ctx.fillText(`📊 VOLATILIDAD: ${volTexto}`, 540, 365);
 
     // Tarjetas del Top 3
     const startY = 460;
