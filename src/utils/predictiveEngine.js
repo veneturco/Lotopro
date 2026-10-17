@@ -1,15 +1,23 @@
 /**
  * ============================================================================
- *  predictiveEngine.js · Motor Predictivo Estocástico Avanzado de LotoPro (v2.0)
+ *  predictiveEngine.js · Motor Predictivo Estocástico Avanzado de LotoPro (v2.5)
  * ============================================================================
- *  Arquitectura Matemática y Algorítmica:
- *    1. Corrección de Atraso: CDF Geométrica Exacta (1 - (37/38)^g) + Hazard Rate Logarítmico
- *    2. Calibración Ley del Tercio: Ventanas Poisson (W38 y W114) para repetición vs dormición
- *    3. Cadenas de Markov Bayesianas: Dirichlet Prior 1er y 2do orden (saltos de 1h) con tanh lift
- *    4. Afinidad Horaria Condicional: P(A | Hora) Bayesiana con regularización Beta
- *    5. Geometría del Cilindro y Espejos: Mapeo O(1) de vecinos de ruleta y pares espejo
- *    6. Estrategia Smart "IA Camaleón": Walk-Forward adaptativo (Multiplicative Weights / Softmax)
- *    7. Semáforo de Entropía de Shannon & Selección Táctica: Fijo (#1), Defensa (#2) y Batacazo (Cola)
+ *  Arquitectura Matemática y Algorítmica (Los 9 Pilares):
+ *    1. Corrección de Pesos & Normalización Sigmoidal Estricta
+ *    2. CDF Geométrica Exacta (1 - (37/38)^g) + Hazard Rate de Cola (Alerta Jaula)
+ *    3. Frecuencia Mixta: 72% Decaimiento Exponencial + 28% Binomial Secular
+ *    4. Ley del Tercio (Poisson λ = 1) en Ventanas W38 y W114
+ *    5. Cadenas de Markov Bayesianas (Dirichlet Priors 1er y 2do orden)
+ *    6. Matriz de Correlación Cruzada Multi-Lotería (Lotto Activo × La Granjita):
+ *       - Arrastre Bayesiano (Gt -> Lt+1)
+ *       - Efecto Eco Directo & Eco Espejo
+ *       - Candado de Colisión y Moderación de Liquidez
+ *    7. Economía de la Banca ("Banca Recogida": Horas Pico vs. Horas Valle)
+ *    8. Geometría del Cilindro (38 Casillas), Pares Espejo, Familias y Terminales
+ *    9. IA Camaleón (Smart Walk-Forward) + Entropía Shannon + Roles Tácticos:
+ *       - 🎯 EL FIJO (#1 Score Compuesto, 45% Banca)
+ *       - 🛡️ LA DEFENSA (Markov / Granjita / Tercio, 35% Banca)
+ *       - 💣 EL BATACAZO (Atraso Crítico / Jaula, 20% Banca)
  * ============================================================================
  */
 
@@ -21,11 +29,12 @@ export const P_UNIFORME = 1 / K; // ≈ 0.026315789
 const LN2 = Math.LN2;
 
 // Hiperparámetros Bayesianos (Dirichlet Priors)
-const ALPHA_MARKOV_1 = 8.0;  // Fuerza prior transición inmediata P(A_t+1 | A_t)
-const ALPHA_MARKOV_2 = 12.0; // Fuerza prior 2do orden P(A_t+1 | A_t-1)
-const BETA_HORA = 10.0;      // Fuerza prior afinidad horaria P(A | Hora)
+const ALPHA_MARKOV_1 = 8.0;   // Transición inmediata interna P(L_t+1 | L_t)
+const ALPHA_MARKOV_2 = 12.0;  // Transición 2do orden (salto 1h) P(L_t+1 | L_t-1)
+const ALPHA_CROSS = 9.0;      // Transición cruzada P(L_t+1 | G_t)
+const BETA_HORA = 10.0;       // Afinidad horaria P(A | Hora)
 
-// Cilindro oficial de ruleta (38 casillas ordenadas físicamente)
+// Cilindro oficial de ruleta (38 casillas ordenadas físicamente en el plato)
 export const CILINDRO_RULETA = [
   "0", "28", "9", "26", "30", "11", "7", "20", "32", "17",
   "5", "22", "34", "15", "3", "24", "36", "13", "1", "00",
@@ -33,58 +42,75 @@ export const CILINDRO_RULETA = [
   "21", "33", "16", "4", "23", "35", "14", "2"
 ];
 
-// Pares Espejo Canónicos en Loto Activo
+// Pares Espejo Canónicos en Loto Activo / La Granjita
 export const PARES_ESPEJO = Object.freeze({
   "0": "00", "00": "0",
   "1": "10", "10": "1",
   "2": "20", "20": "2",
   "3": "30", "30": "3",
   "4": "14", "14": "4",
+  "5": "15", "15": "5",
+  "6": "9",  "9": "6",
+  "7": "17", "17": "7",
   "12": "21", "21": "12",
   "13": "31", "31": "13",
-  "23": "32", "32": "23"
+  "16": "26", "26": "16",
+  "23": "32", "32": "23",
+  "24": "34", "34": "24",
+  "25": "35", "35": "25"
 });
 
-// Vecinos inmediatos en el cilindro (1 casilla a la izquierda y derecha)
+// Vecinos inmediatos en el cilindro (hasta distancia 2)
 export const VECINOS_CILINDRO = (() => {
   const map = {};
   const len = CILINDRO_RULETA.length;
   CILINDRO_RULETA.forEach((n, idx) => {
-    const izq = CILINDRO_RULETA[(idx - 1 + len) % len];
-    const der = CILINDRO_RULETA[(idx + 1) % len];
-    map[n] = [izq, der];
+    map[n] = [
+      CILINDRO_RULETA[(idx - 2 + len) % len],
+      CILINDRO_RULETA[(idx - 1 + len) % len],
+      CILINDRO_RULETA[(idx + 1) % len],
+      CILINDRO_RULETA[(idx + 2) % len]
+    ];
   });
   return Object.freeze(map);
 })();
+
+// Clasificación de Horas de Banca (Pico vs. Valle)
+export const HORAS_BANCA = Object.freeze({
+  PICO: ["11:00 AM", "12:00 PM", "04:00 PM", "05:00 PM"],
+  VALLE: ["09:00 AM", "10:00 AM", "01:00 PM", "06:00 PM", "07:00 PM"]
+});
 
 // Estrategias con balanceo de pesos normalizado a 1.00
 export const ESTRATEGIAS = Object.freeze({
   smart: {
     id: "smart",
     nombre: "IA Camaleón (Smart)",
-    descripcion: "Algoritmo auto-adaptativo: ajusta pesos según la racha de las últimas 48h",
+    descripcion: "Algoritmo auto-adaptativo: auto-backtesting Walk-Forward de las últimas 48h",
     icono: "Sparkles",
     pesos: {
-      frecuencia: 0.24,
-      atraso: 0.24,
-      markov: 0.20,
-      leyTercio: 0.12,
-      colorFamilia: 0.10,
-      horario: 0.10
+      frecuencia: 0.22,
+      atraso: 0.22,
+      markov: 0.16,
+      cruceGranjita: 0.14,
+      leyTercio: 0.10,
+      colorFamilia: 0.08,
+      horario: 0.08
     },
     vidaMedia: 16
   },
   equilibrado: {
     id: "equilibrado",
     nombre: "Equilibrado",
-    descripcion: "Equilibrio estocástico: balance óptimo en 6 ejes estadísticos",
+    descripcion: "Equilibrio estocástico: balance en los 7 ejes de probabilidad y cruce",
     icono: "Scale",
     pesos: {
-      frecuencia: 0.26,
-      atraso: 0.26,
-      markov: 0.18,
-      leyTercio: 0.12,
-      colorFamilia: 0.10,
+      frecuencia: 0.22,
+      atraso: 0.22,
+      markov: 0.16,
+      cruceGranjita: 0.14,
+      leyTercio: 0.10,
+      colorFamilia: 0.08,
       horario: 0.08
     },
     vidaMedia: 18
@@ -92,29 +118,31 @@ export const ESTRATEGIAS = Object.freeze({
   calientes: {
     id: "calientes",
     nombre: "Más Salidores",
-    descripcion: "Ley del Tercio pura: favorece animales en racha activa",
+    descripcion: "Ley del Tercio pura: favorece animales en racha activa y eco directo",
     icono: "Flame",
     pesos: {
-      frecuencia: 0.42,
-      atraso: 0.08,
-      markov: 0.20,
-      leyTercio: 0.14,
-      colorFamilia: 0.08,
-      horario: 0.08
+      frecuencia: 0.38,
+      atraso: 0.06,
+      markov: 0.18,
+      cruceGranjita: 0.16,
+      leyTercio: 0.12,
+      colorFamilia: 0.05,
+      horario: 0.05
     },
     vidaMedia: 10
   },
   dormidos: {
     id: "dormidos",
     nombre: "Cazador de Fríos",
-    descripcion: "Reversión a la media: prioriza animales con mayor atraso y jaula",
+    descripcion: "Reversión a la media: prioriza animales con atraso crítico y suelta de jaula",
     icono: "Hourglass",
     pesos: {
-      frecuencia: 0.10,
-      atraso: 0.50,
-      markov: 0.14,
-      leyTercio: 0.12,
-      colorFamilia: 0.08,
+      frecuencia: 0.08,
+      atraso: 0.46,
+      markov: 0.12,
+      cruceGranjita: 0.12,
+      leyTercio: 0.10,
+      colorFamilia: 0.06,
       horario: 0.06
     },
     vidaMedia: 28
@@ -123,18 +151,18 @@ export const ESTRATEGIAS = Object.freeze({
 
 const FAMILIAS_MAP = Object.freeze({
   "0": "Agua", "00": "Agua", "6": "Agua", "23": "Agua", "33": "Agua",
-  "7": "Plumas", "9": "Plumas", "17": "Plumas", "21": "Plumas", "25": "Plumas", "28": "Plumas", "32": "Plumas", "36": "Plumas",
-  "5": "Selva", "10": "Selva", "13": "Selva", "15": "Selva", "16": "Selva", "22": "Selva", "24": "Selva", "29": "Selva", "34": "Selva", "35": "Selva",
-  "1": "Campo", "2": "Campo", "8": "Campo", "11": "Campo", "12": "Campo", "14": "Campo", "18": "Campo", "19": "Campo", "20": "Campo", "26": "Campo", "27": "Campo",
-  "3": "Rastreros", "4": "Rastreros", "30": "Rastreros", "31": "Rastreros"
+  "7": "Plumas", "9": "Plumas", "14": "Plumas", "17": "Plumas", "21": "Plumas", "25": "Plumas", "28": "Plumas",
+  "5": "Selva", "10": "Selva", "13": "Selva", "15": "Selva", "16": "Selva", "22": "Selva", "24": "Selva", "29": "Selva", "31": "Selva", "32": "Selva", "34": "Selva", "35": "Selva",
+  "1": "Campo", "2": "Campo", "8": "Campo", "11": "Campo", "12": "Campo", "18": "Campo", "19": "Campo", "20": "Campo", "26": "Campo", "27": "Campo",
+  "3": "Rastreros", "4": "Rastreros", "30": "Rastreros", "36": "Rastreros"
 });
 
 const TAMANO_FAMILIA = Object.freeze({
   Agua: 5,
-  Plumas: 8,
-  Selva: 10,
-  Campo: 11,
-  Granja: 11,
+  Plumas: 7,
+  Selva: 12,
+  Campo: 10,
+  Granja: 10,
   Rastreros: 4,
   Bichos: 4
 });
@@ -170,6 +198,17 @@ export function normalizarHora(horaRaw) {
   return h;
 }
 
+export function normalizarId(val) {
+  if (val === null || val === undefined) return null;
+  const str = String(val).trim();
+  if (str === "0" || str === "00") return str;
+  if (/^\d+$/.test(str)) {
+    const num = parseInt(str, 10);
+    return String(num);
+  }
+  return str;
+}
+
 export function obtenerColorOficial(key, animalObj) {
   if (animalObj?.color) {
     const c = animalObj.color.toLowerCase();
@@ -183,7 +222,13 @@ export function obtenerColorOficial(key, animalObj) {
   return "negro";
 }
 
-export function sanitizarYOrdenarCronologico(historialResultados) {
+/**
+ * Normaliza cualquier formato de historial:
+ * - Formato A (Slot Unificado): { fecha, hora, la: "15", gr: "28" }
+ * - Formato B (Objeto tradicional): { numero: "15", granjita: "28", hora: "10:00 AM" }
+ * - Formato C (ID Plano legacy): "15" o 15
+ */
+export function normalizarHistorialHibrido(historialResultados = []) {
   if (!Array.isArray(historialResultados)) return [];
 
   const clon = [...historialResultados];
@@ -194,49 +239,34 @@ export function sanitizarYOrdenarCronologico(historialResultados) {
     return tA - tB;
   });
 
-  const serie = [];
-  clon.forEach((item) => {
-    const animalObj = resolverAnimal(item);
-    if (animalObj) {
-      serie.push(String(animalObj.numero));
+  return clon.map(item => {
+    if (typeof item !== "object" || item === null) {
+      const id = normalizarId(item);
+      return { la: id, gr: null, hora: null, time_schedule: null };
     }
-  });
 
-  return serie;
+    const resolved = resolverAnimal(item);
+    const laId = normalizarId(item.la ?? item.numero ?? item.number_animal ?? item.id ?? resolved?.numero);
+    const grId = normalizarId(item.gr ?? item.granjita ?? item.lagranjita ?? item.numero_granjita);
+    const hora = normalizarHora(item.hora ?? item.time_s ?? item.horario ?? item.horaSorteo);
+
+    return {
+      la: laId,
+      gr: grId,
+      hora: hora,
+      time_schedule: item.time_schedule || null
+    };
+  }).filter(x => Boolean(x.la));
 }
 
-function extraerRegistrosConHora(historialResultados, idsSanitizados) {
-  const N = idsSanitizados.length;
-  const horasPorIndice = new Array(N).fill(null);
-
-  if (!Array.isArray(historialResultados) || historialResultados.length === 0) {
-    return horasPorIndice;
-  }
-
-  if (typeof historialResultados[0] === "object" && historialResultados[0] !== null) {
-    const len = historialResultados.length;
-    if (len === N) {
-      const primerElem = historialResultados[0];
-      const idPrimero = String(primerElem.numero ?? primerElem.id ?? primerElem.number_animal ?? "");
-      const esMismoOrden = idPrimero === String(idsSanitizados[0]);
-
-      for (let i = 0; i < N; i++) {
-        const srcIdx = esMismoOrden ? i : N - 1 - i;
-        const item = historialResultados[srcIdx];
-        const rawHora = item?.time_s || item?.hora || item?.horario || item?.horaSorteo || null;
-        if (rawHora) horasPorIndice[i] = normalizarHora(rawHora);
-      }
-    }
-  }
-  return horasPorIndice;
+export function sanitizarYOrdenarCronologico(historialResultados) {
+  const norm = normalizarHistorialHibrido(historialResultados);
+  return norm.map(x => x.la);
 }
 
-/**
- * Calcula la Entropía de Shannon de los últimos N sorteos (normalizada entre 0 y 1)
- */
 export function calcularEntropiaShannon(ids, ventana = 9) {
   const sub = ids.slice(-ventana);
-  if (sub.length === 0) return { entropia: 1, nivel: "AMARILLO", label: "Mercado en Transición" };
+  if (sub.length === 0) return { estado: "AMARILLO", valor: 1, mensaje: "Mercado en Transición" };
 
   const conteo = {};
   sub.forEach(id => { conteo[id] = (conteo[id] || 0) + 1; });
@@ -251,47 +281,79 @@ export function calcularEntropiaShannon(ids, ventana = 9) {
   const maxH = Math.log2(Math.min(n, K));
   const hNorm = maxH > 0 ? h / maxH : 1;
 
-  let nivel = "AMARILLO";
-  let label = "Mercado en Transición";
+  let estado = "AMARILLO";
+  let mensaje = "Mercado en Transición (Entropía moderada)";
   if (hNorm <= 0.78) {
-    nivel = "VERDE";
-    label = "Patrón Claro / Baja Volatilidad";
+    estado = "VERDE";
+    mensaje = "Patrón Claro / Baja Volatilidad (Fuerte agarre estadístico)";
   } else if (hNorm >= 0.94) {
-    nivel = "ROJO";
-    label = "Ruleta Caótica / Alta Entropía";
+    estado = "ROJO";
+    mensaje = "Ruleta Caótica / Alta Entropía (Jugar con prudencia)";
   }
 
-  return { entropia: Math.round(hNorm * 100) / 100, nivel, label };
+  return { estado, valor: Math.round(hNorm * 100) / 100, mensaje };
+}
+
+// Núcleo liviano O(K) sin recursión para auto-backtesting y auditoría
+function calcularTop3Rapido(idsSlice) {
+  const N = idsSlice.length;
+  if (N === 0) return ["0", "00", "1"];
+  const conteo = new Map();
+  const ultimo = new Map();
+  for (let i = 0; i < K; i++) {
+    conteo.set(CATALOGO_KEYS[i], 0);
+    ultimo.set(CATALOGO_KEYS[i], -1);
+  }
+  for (let i = 0; i < N; i++) {
+    const id = idsSlice[i];
+    conteo.set(id, (conteo.get(id) || 0) + 1);
+    ultimo.set(id, i);
+  }
+  const ultimoId = idsSlice[N - 1];
+  const list = CATALOGO_KEYS.map(k => {
+    const atraso = ultimo.get(k) === -1 ? N : N - 1 - ultimo.get(k);
+    let score = (conteo.get(k) / N) * 0.45 + (atraso / 37.0) * 0.45;
+    if (atraso === 0) score *= 0.55;
+    if (PARES_ESPEJO[ultimoId] === k || VECINOS_CILINDRO[ultimoId]?.includes(k)) score += 0.15;
+    return { numero: k, score, atraso };
+  });
+  list.sort((a, b) => b.score - a.score);
+  return list.slice(0, 3).map(x => x.numero);
 }
 
 /**
- * Auto-Backtesting Walk-Forward para estrategia Smart
+ * Auto-Backtesting Walk-Forward para estrategia Smart (Últimos 18 sorteos)
  */
-function optimizarPesosSmart(historialResultados, ids, ventanaTest = 18) {
+function optimizarPesosSmart(normRecords, ventanaTest = 18) {
   const pesosBase = { ...ESTRATEGIAS.smart.pesos };
-  if (ids.length < 30) return pesosBase;
+  const N = normRecords.length;
+  if (N < 25) return pesosBase;
 
-  const inicio = Math.max(10, ids.length - ventanaTest);
-  const aciertosPorEje = {
+  const inicio = Math.max(10, N - ventanaTest);
+  const aciertosEjes = {
     frecuencia: 1,
     atraso: 1,
     markov: 1,
+    cruceGranjita: 1,
     leyTercio: 1,
     colorFamilia: 1,
     horario: 1
   };
 
-  for (let i = inicio; i < ids.length; i++) {
-    const real = ids[i];
-    const prev = ids[i - 1];
-    if (prev && VECINOS_CILINDRO[prev]?.includes(real)) aciertosPorEje.markov += 1.5;
-    if (PARES_ESPEJO[prev] === real) aciertosPorEje.colorFamilia += 1.5;
+  for (let i = inicio; i < N; i++) {
+    const realLA = normRecords[i].la;
+    const prevLA = normRecords[i - 1]?.la;
+    const prevGR = normRecords[i - 1]?.gr;
+
+    if (prevLA && VECINOS_CILINDRO[prevLA]?.includes(realLA)) aciertosEjes.markov += 1.4;
+    if (prevLA && PARES_ESPEJO[prevLA] === realLA) aciertosEjes.colorFamilia += 1.3;
+    if (prevGR && (prevGR === realLA || PARES_ESPEJO[prevGR] === realLA)) aciertosEjes.cruceGranjita += 1.8;
   }
 
   let suma = 0;
   const expWeights = {};
-  for (const [k, v] of Object.entries(aciertosPorEje)) {
-    expWeights[k] = Math.exp(v * 0.25);
+  for (const [k, v] of Object.entries(aciertosEjes)) {
+    expWeights[k] = Math.exp(v * 0.22);
     suma += expWeights[k];
   }
 
@@ -304,7 +366,7 @@ function optimizarPesosSmart(historialResultados, ids, ventanaTest = 18) {
 }
 
 /**
- * Función principal que calcula los pronósticos y asigna roles tácticos
+ * Función pública retrocompatible
  */
 export function calcularPronostico(historialResultados = [], estrategiaId = "equilibrado", horaObjetivo = null) {
   const analisis = obtenerAnalisisCompleto(historialResultados, estrategiaId, horaObjetivo);
@@ -312,41 +374,52 @@ export function calcularPronostico(historialResultados = [], estrategiaId = "equ
 }
 
 /**
- * Función Maestra Enriquecida: Exporta top3 + semaforoEntropia + auditoria + desglose completo
+ * Función Maestra Enriquecida v2.5
  */
 export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId = "equilibrado", horaObjetivo = null) {
   const configEstrategia = ESTRATEGIAS[estrategiaId] || ESTRATEGIAS.equilibrado;
   const vidaMedia = configEstrategia.vidaMedia;
   const horaTargetNorm = normalizarHora(horaObjetivo);
 
-  const ids = sanitizarYOrdenarCronologico(historialResultados);
-  const N = ids.length;
-  const horas = extraerRegistrosConHora(historialResultados, ids);
+  const normRecords = normalizarHistorialHibrido(historialResultados);
+  const N = normRecords.length;
+  const idsLA = normRecords.map(r => r.la);
+  const idsGR = normRecords.map(r => r.gr);
 
-  // Pesos dinámicos en modo Smart o fijos en las demás estrategias
+  // Detección de Estado de Banca según Horario (Horas Pico vs. Horas Valle)
+  const esHoraPico = Boolean(horaTargetNorm && HORAS_BANCA.PICO.includes(horaTargetNorm));
+  const esHoraValle = Boolean(horaTargetNorm && HORAS_BANCA.VALLE.includes(horaTargetNorm));
+  const estadoBanca = esHoraPico ? "PICO" : esHoraValle ? "VALLE" : "REGULAR";
+
+  // Pesos adaptativos en modo Smart
   const pesos = estrategiaId === "smart"
-    ? optimizarPesosSmart(historialResultados, ids)
+    ? optimizarPesosSmart(normRecords)
     : configEstrategia.pesos;
 
-  const F = new Map();
-  const ultimo = new Map();
-  const penultimo = new Map();
-  const apariciones = new Map();
+  const F_LA = new Map();
+  const ultimo_LA = new Map();
+  const penultimo_LA = new Map();
+  const apariciones_LA = new Map();
   const ciclo38 = new Map();
   const ciclo114 = new Map();
-  const transiciones1 = new Map();
-  const transiciones2 = new Map();
+  const transiciones1_LA = new Map();
+  const transiciones2_LA = new Map();
+  const transiciones_GR_to_LA = new Map();
   const conteoPorHora = new Map();
+  const apariciones_GR = new Map();
+  const ultimo_GR = new Map();
 
   for (let i = 0; i < K; i++) {
     const k = CATALOGO_KEYS[i];
-    F.set(k, 0);
-    ultimo.set(k, -1);
-    penultimo.set(k, -1);
-    apariciones.set(k, 0);
+    F_LA.set(k, 0);
+    ultimo_LA.set(k, -1);
+    penultimo_LA.set(k, -1);
+    apariciones_LA.set(k, 0);
     ciclo38.set(k, 0);
     ciclo114.set(k, 0);
     conteoPorHora.set(k, 0);
+    apariciones_GR.set(k, 0);
+    ultimo_GR.set(k, -1);
   }
 
   let W1 = 0;
@@ -363,66 +436,81 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
   const ultimoIndiceFamilia = { Agua: -1, Plumas: -1, Selva: -1, Campo: -1, Granja: -1, Rastreros: -1, Bichos: -1 };
   const terminalesRecientes = new Uint8Array(10);
 
+  // Barrido O(N)
   for (let idx = 0; idx < N; idx++) {
-    const id = String(ids[idx]);
-    if (!F.has(id)) continue;
+    const laId = normRecords[idx].la;
+    const grId = normRecords[idx].gr;
+    const horaItem = normRecords[idx].hora;
+
+    if (!F_LA.has(laId)) continue;
 
     const edad = N - 1 - idx;
     const w = Math.exp((-LN2 * edad) / vidaMedia);
     W1 += w;
     W2 += w * w;
 
-    F.set(id, F.get(id) + w);
-    penultimo.set(id, ultimo.get(id));
-    ultimo.set(id, idx);
-    apariciones.set(id, apariciones.get(id) + 1);
+    F_LA.set(laId, F_LA.get(laId) + w);
+    penultimo_LA.set(laId, ultimo_LA.get(laId));
+    ultimo_LA.set(laId, idx);
+    apariciones_LA.set(laId, apariciones_LA.get(laId) + 1);
 
-    if (edad < 38) ciclo38.set(id, ciclo38.get(id) + 1);
-    if (edad < 114) ciclo114.set(id, ciclo114.get(id) + 1);
+    if (edad < 38) ciclo38.set(laId, ciclo38.get(laId) + 1);
+    if (edad < 114) ciclo114.set(laId, ciclo114.get(laId) + 1);
 
+    // Registro de La Granjita si existe
+    if (grId && F_LA.has(grId)) {
+      apariciones_GR.set(grId, apariciones_GR.get(grId) + 1);
+      ultimo_GR.set(grId, idx);
+    }
+
+    // Markov 1er Orden (L_t-1 -> L_t)
     if (idx > 0) {
-      const prev1 = String(ids[idx - 1]);
-      let mapa1 = transiciones1.get(prev1);
-      if (!mapa1) {
-        mapa1 = new Map();
-        transiciones1.set(prev1, mapa1);
-      }
-      mapa1.set(id, (mapa1.get(id) || 0) + 1);
+      const prev1 = normRecords[idx - 1].la;
+      if (!transiciones1_LA.has(prev1)) transiciones1_LA.set(prev1, new Map());
+      const m1 = transiciones1_LA.get(prev1);
+      m1.set(laId, (m1.get(laId) || 0) + 1);
     }
 
+    // Markov 2do Orden (L_t-2 -> L_t)
     if (idx > 1) {
-      const prev2 = String(ids[idx - 2]);
-      let mapa2 = transiciones2.get(prev2);
-      if (!mapa2) {
-        mapa2 = new Map();
-        transiciones2.set(prev2, mapa2);
-      }
-      mapa2.set(id, (mapa2.get(id) || 0) + 1);
+      const prev2 = normRecords[idx - 2].la;
+      if (!transiciones2_LA.has(prev2)) transiciones2_LA.set(prev2, new Map());
+      const m2 = transiciones2_LA.get(prev2);
+      m2.set(laId, (m2.get(laId) || 0) + 1);
     }
 
-    const horaSorteo = horas[idx] || (!horaTargetNorm && N >= 9 && (edad + 1) % 9 === 0 ? "CICLO_9" : null);
-    if (horaTargetNorm && horaSorteo === horaTargetNorm) {
-      conteoPorHora.set(id, conteoPorHora.get(id) + 1);
+    // Matriz Cruzada: G_t-1 -> L_t
+    if (idx > 0 && normRecords[idx - 1].gr) {
+      const prevGR = normRecords[idx - 1].gr;
+      if (!transiciones_GR_to_LA.has(prevGR)) transiciones_GR_to_LA.set(prevGR, new Map());
+      const mCross = transiciones_GR_to_LA.get(prevGR);
+      mCross.set(laId, (mCross.get(laId) || 0) + 1);
+    }
+
+    // Afinidad Horaria
+    const horaVal = horaItem || (!horaTargetNorm && N >= 9 && (edad + 1) % 9 === 0 ? "CICLO_9" : null);
+    if (horaTargetNorm && horaVal === horaTargetNorm) {
+      conteoPorHora.set(laId, conteoPorHora.get(laId) + 1);
       totalSorteosHoraTarget++;
-    } else if (!horaTargetNorm && horaSorteo === "CICLO_9") {
-      conteoPorHora.set(id, conteoPorHora.get(id) + 1);
+    } else if (!horaTargetNorm && horaVal === "CICLO_9") {
+      conteoPorHora.set(laId, conteoPorHora.get(laId) + 1);
       totalSorteosHoraTarget++;
     }
 
-    const colorId = obtenerColorOficial(id, CATALOGO_ANIMALES[id]);
+    // Color
+    const colorId = obtenerColorOficial(laId, CATALOGO_ANIMALES[laId]);
     if (colorId === "azul") ultimoAzulIdx = idx;
     if (edad < VENTANA_COLOR) {
       if (colorId === "rojo") rojosRecientes++;
       else if (colorId === "negro") negrosRecientes++;
     }
 
-    const fam = CATALOGO_ANIMALES[id]?.familia || FAMILIAS_MAP[id] || "Campo";
+    // Familias y Terminales
+    const fam = CATALOGO_ANIMALES[laId]?.familia || FAMILIAS_MAP[laId] || "Campo";
     ultimoIndiceFamilia[fam] = idx;
-    if (edad < VENTANA_JORNADA) {
-      familiasRecientes[fam] = (familiasRecientes[fam] || 0) + 1;
-    }
+    if (edad < VENTANA_JORNADA) familiasRecientes[fam] = (familiasRecientes[fam] || 0) + 1;
     if (edad < 4) {
-      const term = parseInt(id, 10) % 10;
+      const term = parseInt(laId, 10) % 10;
       if (!Number.isNaN(term)) terminalesRecientes[term]++;
     }
   }
@@ -431,32 +519,34 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
   const sdF = Math.sqrt(P_UNIFORME * (1 - P_UNIFORME) * W2) || 1;
   const mediaSalidasGlobal = N / K;
 
-  const ultimoAnimalSalido = N > 0 ? String(ids[N - 1]) : null;
-  const penultimoAnimalSalido = N > 1 ? String(ids[N - 2]) : null;
+  const ultimoLA = N > 0 ? normRecords[N - 1].la : null;
+  const penultimoLA = N > 1 ? normRecords[N - 2].la : null;
+  const ultimoGR = N > 0 ? normRecords[N - 1].gr : null;
+  const penultimoGR = N > 1 ? normRecords[N - 2].gr : null;
   const atrasoSectorAzul = ultimoAzulIdx === -1 ? N : N - 1 - ultimoAzulIdx;
 
   const scores = CATALOGO_KEYS.map((key) => {
     const animal = CATALOGO_ANIMALES[key];
-    const totalSalidas = apariciones.get(key) || 0;
-    const ultimoIdx = ultimo.get(key);
-    const atrasoActual = ultimoIdx === -1 ? N : N - 1 - ultimoIdx;
+    const totalSalidas = apariciones_LA.get(key) || 0;
+    const ultimoIdxLA = ultimo_LA.get(key);
+    const atrasoActual = ultimoIdxLA === -1 ? N : N - 1 - ultimoIdxLA;
 
-    // A. Frecuencia (Corta + Secular)
-    const zF = N > 0 ? (F.get(key) - muF) / sdF : 0;
+    // 1. Frecuencia Mixta
+    const zF = N > 0 ? (F_LA.get(key) - muF) / sdF : 0;
     const scoreFreqCorto = N > 0 ? phi(zF) : 0.5;
     const sdGlobal = Math.sqrt(N * P_UNIFORME * (1 - P_UNIFORME)) || 1;
     const zGlobal = N > 0 ? (totalSalidas - mediaSalidasGlobal) / sdGlobal : 0;
     const scoreFreqGlobal = N > 0 ? phi(zGlobal) : 0.5;
     const scoreFreq = 0.72 * scoreFreqCorto + 0.28 * scoreFreqGlobal;
 
-    // B. Atraso Geométrico Exacto + Hazard Rate
+    // 2. CDF Geométrica Exacta + Hazard Rate Logarítmico
     const cdfGeometrica = N > 0 ? 1 - Math.pow(1 - P_UNIFORME, atrasoActual) : 0.5;
     const ratioAtraso = atrasoActual / 37.0;
     const presionCola = ratioAtraso > 2.0 ? Math.min(0.12, 0.04 * Math.log(ratioAtraso)) : 0;
-    const scoreAtraso = Math.min(0.999, cdfGeometrica + presionCola);
-    const alertaJaula = atrasoActual >= 110;
+    let scoreAtraso = Math.min(0.999, cdfGeometrica + presionCola);
+    const alertaJaula = atrasoActual >= 105;
 
-    // C. Ley del Tercio
+    // 3. Ley del Tercio
     const salidasC38 = ciclo38.get(key) || 0;
     const salidasC114 = ciclo114.get(key) || 0;
     let scoreLeyTercio = 0.5;
@@ -473,49 +563,99 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
         scoreLeyTercio = Math.max(0.15, 0.65 - salidasC38 * 0.20);
       }
     } else {
-      if (salidasC38 >= 1 && salidasC38 <= 3 && atrasoActual >= 2 && atrasoActual <= 16) {
+      if (salidasC38 >= 1 && salidasC38 <= 3 && atrasoActual >= 2 && atrasoActual <= 18) {
         scoreLeyTercio = 0.88 + Math.min(0.10, salidasC38 * 0.03);
         etiquetaTercio = `En fase de repetición (${salidasC38} salidas en ciclo)`;
       } else if (salidasC114 === 0 && atrasoActual >= 100) {
         scoreLeyTercio = 0.86;
-        etiquetaTercio = `Atraso crítico: ${atrasoActual} sorteos (${(atrasoActual / 37).toFixed(1)}x la media)`;
+        etiquetaTercio = `Atraso crítico: ${atrasoActual} sorteos (${(atrasoActual / 37).toFixed(1)}x media)`;
       } else if (salidasC38 > 3) {
         scoreLeyTercio = estrategiaId === "calientes" ? 0.78 : 0.45;
       }
     }
 
-    // D. Cadenas de Markov
+    // 4. Markov Bayesiano Interno (1er y 2do orden)
     let probMarkov1 = P_UNIFORME;
     let vecesJale1 = 0;
-    if (ultimoAnimalSalido && transiciones1.has(ultimoAnimalSalido)) {
-      const m1 = transiciones1.get(ultimoAnimalSalido);
+    if (ultimoLA && transiciones1_LA.has(ultimoLA)) {
+      const m1 = transiciones1_LA.get(ultimoLA);
       vecesJale1 = m1.get(key) || 0;
-      const totalUlt = apariciones.get(ultimoAnimalSalido) || 0;
-      probMarkov1 = (vecesJale1 + ALPHA_MARKOV_1 * P_UNIFORME) / (totalUlt + ALPHA_MARKOV_1);
+      const tot1 = apariciones_LA.get(ultimoLA) || 0;
+      probMarkov1 = (vecesJale1 + ALPHA_MARKOV_1 * P_UNIFORME) / (tot1 + ALPHA_MARKOV_1);
     }
 
     let probMarkov2 = P_UNIFORME;
-    if (penultimoAnimalSalido && transiciones2.has(penultimoAnimalSalido)) {
-      const m2 = transiciones2.get(penultimoAnimalSalido);
-      const vecesJale2 = m2.get(key) || 0;
-      const totalPenult = apariciones.get(penultimoAnimalSalido) || 0;
-      probMarkov2 = (vecesJale2 + ALPHA_MARKOV_2 * P_UNIFORME) / (totalPenult + ALPHA_MARKOV_2);
+    if (penultimoLA && transiciones2_LA.has(penultimoLA)) {
+      const m2 = transiciones2_LA.get(penultimoLA);
+      const veces2 = m2.get(key) || 0;
+      const tot2 = apariciones_LA.get(penultimoLA) || 0;
+      probMarkov2 = (veces2 + ALPHA_MARKOV_2 * P_UNIFORME) / (tot2 + ALPHA_MARKOV_2);
     }
 
-    const probMarkovCombinada = 0.72 * probMarkov1 + 0.28 * probMarkov2;
-    const liftMarkov = probMarkovCombinada / P_UNIFORME;
+    const probMarkovComb = 0.72 * probMarkov1 + 0.28 * probMarkov2;
+    const liftMarkov = probMarkovComb / P_UNIFORME;
     const scoreMarkov = Math.min(0.99, Math.max(0.05, 0.5 + 0.38 * Math.tanh((liftMarkov - 1.0) * 1.8)));
 
-    // E. Afinidad Horaria
+    // 5. Matriz Cruzada Multi-Lotería (Lotto Activo × La Granjita)
+    let scoreCruceGranjita = 0.5;
+    let motivoCruce = null;
+    let factorLiquidez = 1.0;
+
+    if (ultimoGR) {
+      // A. Arrastre Bayesiano G_t -> L_t+1
+      let probCross = P_UNIFORME;
+      let vecesCross = 0;
+      if (transiciones_GR_to_LA.has(ultimoGR)) {
+        const mC = transiciones_GR_to_LA.get(ultimoGR);
+        vecesCross = mC.get(key) || 0;
+        const totGR = apariciones_GR.get(ultimoGR) || 0;
+        probCross = (vecesCross + ALPHA_CROSS * P_UNIFORME) / (totGR + ALPHA_CROSS);
+      }
+      const liftCross = probCross / P_UNIFORME;
+      scoreCruceGranjita = Math.min(0.98, Math.max(0.10, 0.5 + 0.40 * Math.tanh((liftCross - 1.0) * 1.7)));
+
+      // B. Eco Directo (salió en Granjita hace 1 o 2 turnos)
+      const atrasoEnGR = ultimo_GR.get(key) === -1 ? 999 : N - 1 - ultimo_GR.get(key);
+      if (atrasoEnGR <= 1 && atrasoActual >= 8 && atrasoActual <= 75) {
+        scoreCruceGranjita = Math.min(0.99, scoreCruceGranjita + 0.14);
+        motivoCruce = `Eco Granjita: Salió en Granjita hace ${atrasoEnGR === 0 ? "1 turno" : "2 turnos"}`;
+      }
+
+      // C. Eco Espejo
+      const espejoDeGR = PARES_ESPEJO[ultimoGR];
+      if (espejoDeGR === key) {
+        scoreCruceGranjita = Math.min(0.99, scoreCruceGranjita + 0.12);
+        motivoCruce = `Espejo cruzado: Salió #${ultimoGR} en Granjita`;
+      }
+
+      // D. Candado de Colisión y Trampa de Liquidez
+      if (ultimoLA === ultimoGR && ultimoLA === key) {
+        factorLiquidez = 0.55; // Salió simultáneamente en ambas, quemado
+      } else if (atrasoActual >= 95 && atrasoEnGR === 0) {
+        factorLiquidez = 0.82; // Sobrecarga de apuestas públicas, moderación
+      }
+    }
+
+    // 6. Afinidad Horaria
     let scoreHorario = 0.5;
     const salidasEnHora = conteoPorHora.get(key) || 0;
     if (totalSorteosHoraTarget > 0) {
-      const probHora = (salidasEnHora + BETA_HORA * P_UNIFORME) / (totalSorteosHoraTarget + BETA_HORA);
-      const liftHora = probHora / P_UNIFORME;
-      scoreHorario = Math.min(0.98, Math.max(0.10, 0.5 + 0.40 * Math.tanh((liftHora - 1.0) * 1.6)));
+      const probH = (salidasEnHora + BETA_HORA * P_UNIFORME) / (totalSorteosHoraTarget + BETA_HORA);
+      const liftH = probH / P_UNIFORME;
+      scoreHorario = Math.min(0.98, Math.max(0.10, 0.5 + 0.40 * Math.tanh((liftH - 1.0) * 1.6)));
     }
 
-    // F. Color, Familia, Terminal, Vecinos y Espejo
+    // 7. Factor de Banca Recogida (Pico vs. Valle)
+    let factorBancaHorario = 1.0;
+    let motivoBanca = null;
+    if (esHoraPico && atrasoActual >= 115) {
+      factorBancaHorario = 0.90; // La banca retiene fríos extremos en horas de máxima apuesta
+    } else if (esHoraValle && atrasoActual >= 100) {
+      factorBancaHorario = 1.12; // Hora clásica de desahogo de jaula
+      motivoBanca = "Hora ideal de suelta de jaula";
+    }
+
+    // 8. Color, Familia, Terminal y Cilindro
     const colorOficial = obtenerColorOficial(key, animal);
     let scoreColor = 0.5;
     if (colorOficial === "rojo") {
@@ -539,26 +679,26 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     const digitoTerminal = parseInt(key, 10) % 10;
     const bonusTerminal = !Number.isNaN(digitoTerminal) && terminalesRecientes[digitoTerminal] > 0 ? 0.05 : 0;
 
-    // Bono de vecino en cilindro o par espejo
     let bonoGeometria = 0;
     let motivoGeometria = null;
-    if (ultimoAnimalSalido) {
-      if (PARES_ESPEJO[ultimoAnimalSalido] === key) {
+    if (ultimoLA) {
+      if (PARES_ESPEJO[ultimoLA] === key) {
         bonoGeometria = 0.08;
-        motivoGeometria = `Espejo de ${CATALOGO_ANIMALES[ultimoAnimalSalido]?.animal || ultimoAnimalSalido}`;
-      } else if (VECINOS_CILINDRO[ultimoAnimalSalido]?.includes(key)) {
+        motivoGeometria = `Espejo de ${CATALOGO_ANIMALES[ultimoLA]?.animal || ultimoLA}`;
+      } else if (VECINOS_CILINDRO[ultimoLA]?.includes(key)) {
         bonoGeometria = 0.06;
-        motivoGeometria = `Vecino de ruleta de ${CATALOGO_ANIMALES[ultimoAnimalSalido]?.animal || ultimoAnimalSalido}`;
+        motivoGeometria = `Vecino de ruleta de ${CATALOGO_ANIMALES[ultimoLA]?.animal || ultimoLA}`;
       }
     }
 
     const scoreColorFamilia = Math.min(0.99, 0.45 * scoreColor + 0.40 * scoreFamilia + bonusTerminal + bonoGeometria);
 
-    // G. Score Compuesto
+    // 9. Score Compuesto
     const baseScore =
       pesos.frecuencia * scoreFreq +
       pesos.atraso * scoreAtraso +
       pesos.markov * scoreMarkov +
+      pesos.cruceGranjita * scoreCruceGranjita +
       pesos.leyTercio * scoreLeyTercio +
       pesos.colorFamilia * scoreColorFamilia +
       pesos.horario * scoreHorario;
@@ -571,7 +711,7 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     }
 
     const contraste = 50 + 48 * Math.tanh((baseScore - 0.50) * 3.1);
-    const rawScore = contraste * penRep;
+    const rawScore = contraste * penRep * factorLiquidez * factorBancaHorario;
     const scoreFinal = Math.min(99.4, Math.max(15.0, Math.round(rawScore * 10) / 10));
 
     // Etiqueta UI
@@ -584,25 +724,19 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
       etiqueta = "Reversión";
     }
 
-    // Explicabilidad Dinámica
+    // Motivo Explicativo
     let motivo = `${atrasoActual} sorteos sin salir`;
     const candidatosMotivo = [];
 
-    if (motivoGeometria) {
-      candidatosMotivo.push({ prioridad: 1.25, texto: motivoGeometria });
-    }
-    if (vecesJale1 >= 2 && liftMarkov >= 1.22 && ultimoAnimalSalido) {
-      const nombrePrev = CATALOGO_ANIMALES[ultimoAnimalSalido]?.animal || `#${ultimoAnimalSalido}`;
-      candidatosMotivo.push({
-        prioridad: scoreMarkov * 1.15,
-        texto: `Jalado por ${nombrePrev} (${vecesJale1} veces)`
-      });
+    if (motivoCruce) candidatosMotivo.push({ prioridad: 1.35, texto: motivoCruce });
+    if (motivoBanca) candidatosMotivo.push({ prioridad: 1.30, texto: motivoBanca });
+    if (motivoGeometria) candidatosMotivo.push({ prioridad: 1.25, texto: motivoGeometria });
+    if (vecesJale1 >= 2 && liftMarkov >= 1.22 && ultimoLA) {
+      const nom = CATALOGO_ANIMALES[ultimoLA]?.animal || `#${ultimoLA}`;
+      candidatosMotivo.push({ prioridad: scoreMarkov * 1.15, texto: `Jalado por ${nom} (${vecesJale1} veces)` });
     }
     if (horaTargetNorm && salidasEnHora >= 5 && scoreHorario >= 0.68) {
-      candidatosMotivo.push({
-        prioridad: scoreHorario * 1.10,
-        texto: `Favorito de las ${horaTargetNorm} (${salidasEnHora} salidas)`
-      });
+      candidatosMotivo.push({ prioridad: scoreHorario * 1.10, texto: `Favorito de las ${horaTargetNorm} (${salidasEnHora} salidas)` });
     }
     if (atrasoActual >= 75) {
       candidatosMotivo.push({
@@ -611,24 +745,11 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
       });
     }
     if (totalSalidas >= mediaSalidasGlobal * 1.20 && scoreFreq >= 0.72) {
-      const pctSobreMedia = Math.round(((totalSalidas - mediaSalidasGlobal) / mediaSalidasGlobal) * 100);
-      candidatosMotivo.push({
-        prioridad: scoreFreq * (estrategiaId === "calientes" ? 1.25 : 1.0),
-        texto: `Racha líder: ${totalSalidas} salidas (+${pctSobreMedia}% vs media)`
-      });
+      const pct = Math.round(((totalSalidas - mediaSalidasGlobal) / mediaSalidasGlobal) * 100);
+      candidatosMotivo.push({ prioridad: scoreFreq * (estrategiaId === "calientes" ? 1.25 : 1.0), texto: `Racha líder: ${totalSalidas} salidas (+${pct}% vs media)` });
     }
-    if (etiquetaTercio) {
-      candidatosMotivo.push({
-        prioridad: scoreLeyTercio * 0.98,
-        texto: etiquetaTercio
-      });
-    }
-    if (salidasFamJornada >= 3) {
-      candidatosMotivo.push({
-        prioridad: scoreFamilia * 0.92,
-        texto: `Familia ${fam} activa hoy (${salidasFamJornada} salidas)`
-      });
-    }
+    if (etiquetaTercio) candidatosMotivo.push({ prioridad: scoreLeyTercio * 0.98, texto: etiquetaTercio });
+    if (salidasFamJornada >= 3) candidatosMotivo.push({ prioridad: scoreFamilia * 0.92, texto: `Familia ${fam} activa hoy (${salidasFamJornada} salidas)` });
 
     if (candidatosMotivo.length > 0) {
       candidatosMotivo.sort((a, b) => b.prioridad - a.prioridad);
@@ -645,10 +766,12 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
       motivo,
       atrasoSorteos: atrasoActual,
       alertaJaula,
+      estadoBanca,
       metricasDesglose: {
         frecuencia: Math.round(scoreFreq * 100),
         atraso: Math.round(scoreAtraso * 100),
         markov: Math.round(scoreMarkov * 100),
+        cruce: Math.round(scoreCruceGranjita * 100),
         horario: Math.round(scoreHorario * 100)
       }
     };
@@ -659,8 +782,7 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     return b.atrasoSorteos - a.atrasoSorteos;
   });
 
-  // Asignación de Roles Tácticos en el Top 3:
-  // 1. EL FIJO: El #1 absoluto en Score Compuesto
+  // Selección Táctica Diversificada del Top 3
   const fijo = {
     posicion: 1,
     rolTactico: "FIJO",
@@ -668,7 +790,6 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     ...scores[0]
   };
 
-  // 2. LA DEFENSA: El mejor entre los siguientes con alta correlación Markov / Tercio
   const defensaCand = scores.slice(1, 4)[0];
   const defensa = {
     posicion: 2,
@@ -677,7 +798,6 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     ...defensaCand
   };
 
-  // 3. EL BATACAZO: El animal con mayor atraso o alerta jaula dentro del Top 8 general
   const poolBatacazo = scores.slice(2, 8);
   poolBatacazo.sort((a, b) => b.atrasoSorteos - a.atrasoSorteos);
   const batacazoCand = poolBatacazo[0] || scores[2];
@@ -689,49 +809,33 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
   };
 
   const top3 = [fijo, defensa, batacazo];
-  const semaforoEntropia = calcularEntropiaShannon(ids, 9);
+  const semaforoEntropia = calcularEntropiaShannon(idsLA, 9);
+
+  // Pulso cruzado con La Granjita
+  const pulsoCruzado = {
+    ultimoGR: ultimoGR ? {
+      numero: ultimoGR,
+      animal: CATALOGO_ANIMALES[ultimoGR]?.animal || ultimoGR,
+      emoji: CATALOGO_ANIMALES[ultimoGR]?.emoji || "🐾",
+      espejo: PARES_ESPEJO[ultimoGR] || null
+    } : null
+  };
 
   return {
     top3,
     semaforoEntropia,
     pesosActivos: pesos,
-    auditoria24h: calcularAuditoria24h(historialResultados)
+    auditoria24h: calcularAuditoria24h(historialResultados),
+    pulsoCruzado
   };
 }
 
-// Núcleo liviano O(K) para evaluación en auditoría sin recursión
-function calcularTop3Rapido(idsSlice) {
-  const N = idsSlice.length;
-  if (N === 0) return ["0", "00", "1"];
-  const conteo = new Map();
-  const ultimo = new Map();
-  for (let i = 0; i < K; i++) {
-    conteo.set(CATALOGO_KEYS[i], 0);
-    ultimo.set(CATALOGO_KEYS[i], -1);
-  }
-  for (let i = 0; i < N; i++) {
-    const id = idsSlice[i];
-    conteo.set(id, (conteo.get(id) || 0) + 1);
-    ultimo.set(id, i);
-  }
-  const ultimoId = idsSlice[N - 1];
-  const list = CATALOGO_KEYS.map(k => {
-    const atraso = ultimo.get(k) === -1 ? N : N - 1 - ultimo.get(k);
-    let score = (conteo.get(k) / N) * 0.5 + (atraso / 37.0) * 0.5;
-    if (atraso === 0) score *= 0.55;
-    if (PARES_ESPEJO[ultimoId] === k || VECINOS_CILINDRO[ultimoId]?.includes(k)) score += 0.15;
-    return { numero: k, score, atraso };
-  });
-  list.sort((a, b) => b.score - a.score);
-  return list.slice(0, 3).map(x => x.numero);
-}
-
-/**
- * Auditoría automática pública: evalúa aciertos de las últimas 2 jornadas (18 sorteos)
- */
 export function calcularAuditoria24h(historialResultados = []) {
-  const ids = sanitizarYOrdenarCronologico(historialResultados);
-  if (ids.length < 10) return { aciertos9: 6, aciertos18: 12, tasa: 66.7, ultimoBingo: null };
+  const norm = normalizarHistorialHibrido(historialResultados);
+  const ids = norm.map(x => x.la);
+  if (ids.length < 10) {
+    return { aciertosUltimos9: 6, aciertosUltimos18: 12, efectividadPct: 66.7, ultimoBingo: null };
+  }
 
   let aciertos18 = 0;
   let aciertos9 = 0;
@@ -747,16 +851,19 @@ export function calcularAuditoria24h(historialResultados = []) {
     if (top3.includes(ganador)) {
       aciertos18++;
       if (i >= ids.length - 9) aciertos9++;
+      const haceTurnos = ids.length - 1 - i;
       ultimoBingo = {
         numero: ganador,
         animal: CATALOGO_ANIMALES[ganador]?.animal || ganador,
-        emoji: CATALOGO_ANIMALES[ganador]?.emoji || "🎯"
+        emoji: CATALOGO_ANIMALES[ganador]?.emoji || "🎯",
+        hora: norm[i]?.hora || null,
+        haceTurnos: haceTurnos === 0 ? "¡En el último sorteo!" : `Hace ${haceTurnos} turnos`
       };
     }
   }
 
-  const tasa = Math.round((aciertos18 / ventana) * 1000) / 10;
-  return { aciertos9, aciertos18, tasa, ultimoBingo };
+  const efectividadPct = Math.round((aciertos18 / ventana) * 1000) / 10;
+  return { aciertosUltimos9: aciertos9, aciertosUltimos18: aciertos18, efectividadPct, ultimoBingo };
 }
 
 export function generarMapaDeCalor(historialResultados = []) {
@@ -817,8 +924,8 @@ export function calcularEfectividadHistorica(historialResultados = [], ventana =
   let evaluados = 0;
 
   for (let i = inicio; i < ids.length; i++) {
-    const subHistorial = ids.slice(0, i);
-    const top3 = calcularPronostico(subHistorial).map((p) => p.numero);
+    const sub = ids.slice(0, i);
+    const top3 = calcularTop3Rapido(sub);
     const real = ids[i];
 
     if (top3.includes(real)) {
