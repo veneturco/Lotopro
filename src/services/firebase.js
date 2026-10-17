@@ -112,6 +112,8 @@ export function suscribirUltimosResultados(onUpdate, onError) {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
+          const fechaDoc = data?.fecha || "";
+          const esDeHoy = fechaDoc === hoy;
           const list = Array.isArray(data?.resultados) ? data.resultados : [];
 
           // Preservar el histórico de referencia para el pronóstico
@@ -120,24 +122,25 @@ export function suscribirUltimosResultados(onUpdate, onError) {
 
           if (list.length > 0) {
             baseHistorica = list;
-          } else if (cacheActual?.resultadosHoy?.length > 0 && cacheActual.fecha !== hoy) {
-            baseHistorica = cacheActual.resultadosHoy;
           } else if (cacheActual?.historicoReciente?.length > 0) {
             baseHistorica = cacheActual.historicoReciente;
           }
 
+          // Si el documento en Firestore es de ayer, para la UI hoy arranca limpio (esperando aperturas)
+          const sorteosHoyParaUI = esDeHoy ? list : [];
+
           // Guardar estado consolidado del día
           guardarEnCacheLocal({
             fecha: hoy,
-            resultadosHoy: list,
+            resultadosHoy: sorteosHoyParaUI,
             historicoReciente: baseHistorica
           });
 
           onUpdate({
-            resultados: list,
+            resultados: sorteosHoyParaUI,
             historico: baseHistorica,
             isLive: true,
-            source: "firestore"
+            source: esDeHoy ? "firestore_today" : "firestore_previous_day"
           });
         } else {
           console.warn("Documento 'stats/latest' no existe aún. Usando histórico de respaldo.");

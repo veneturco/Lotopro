@@ -14,8 +14,10 @@ import MyPlaysModal from "./components/MyPlaysModal";
 import FamiliesWidget from "./components/FamiliesWidget";
 import PWAInstallBanner from "./components/PWAInstallBanner";
 import { suscribirUltimosResultados, MOCK_RESULTADOS } from "./services/firebase";
+import HISTORICO_BASE from "./constants/historicoBase.json";
 import {
   calcularPronostico,
+  obtenerAnalisisCompleto,
   generarMapaDeCalor,
   calcularEfectividadHistorica,
   ESTRATEGIAS
@@ -141,11 +143,19 @@ export default function App() {
     });
   }, [resultados]);
 
-  // Base de datos para el motor predictivo: si hoy aún no hay sorteos, usa el histórico previo
+  // Base de datos completa para el motor predictivo:
+  // Combina los 4-5 meses de histórico base (1.260 sorteos) + los sorteos en vivo de hoy
   const datosParaPronostico = useMemo(() => {
-    if (resultados && resultados.length > 0) return resultados;
-    if (historico && historico.length > 0) return historico;
-    return MOCK_RESULTADOS;
+    const sorteosHoy = Array.isArray(resultados) ? resultados : [];
+    const base = Array.isArray(HISTORICO_BASE) && HISTORICO_BASE.length > 0
+      ? HISTORICO_BASE
+      : (Array.isArray(historico) && historico.length > 0 ? historico : MOCK_RESULTADOS);
+
+    if (sorteosHoy.length === 0) {
+      return base;
+    }
+    // Añadimos los sorteos de hoy al final de la serie histórica
+    return [...base, ...sorteosHoy];
   }, [resultados, historico]);
 
   // Información del próximo sorteo en base a la hora actual
@@ -153,10 +163,15 @@ export default function App() {
     return calcularTiempoProximoSorteo();
   }, []);
 
-  // 3. Pronóstico Estocástico reactivo garantizado (funciona antes del 1.er sorteo)
-  const pronosticos = useMemo(() => {
-    return calcularPronostico(datosParaPronostico, estrategia);
-  }, [datosParaPronostico, estrategia]);
+  // 3. Pronóstico Estocástico reactivo v2.0 (con Roles Tácticos, Entropía y Auditoría)
+  const analisisPredictivo = useMemo(() => {
+    const horaObjetivo = infoProximo?.proximoHorario || null;
+    return obtenerAnalisisCompleto(datosParaPronostico, estrategia, horaObjetivo);
+  }, [datosParaPronostico, estrategia, infoProximo?.proximoHorario]);
+
+  const pronosticos = analisisPredictivo.top3;
+  const semaforoEntropia = analisisPredictivo.semaforoEntropia;
+  const auditoria24h = analisisPredictivo.auditoria24h;
 
   // 4. Datos del Mapa de Calor completo (38 animales)
   const heatmapData = useMemo(() => {
@@ -238,7 +253,7 @@ export default function App() {
             {/* Cronómetro al Próximo Sorteo Oficial */}
             <CountdownTimer />
 
-            {/* Sección Predictiva con Selector de Estrategia y Herramientas (Siempre activa) */}
+            {/* Sección Predictiva con Selector de Estrategia, Roles Tácticos y Gestor de Banca */}
             <PredictionCard
               pronosticos={pronosticos}
               proximoSorteoHora={infoProximo?.proximoSorteo}
@@ -246,6 +261,8 @@ export default function App() {
               onCambiarEstrategia={setEstrategia}
               efectividad={efectividad}
               esAperturaMatutina={esAperturaMatutina}
+              semaforoEntropia={semaforoEntropia}
+              auditoria24h={auditoria24h}
               onAbrirHeatmap={() => setIsHeatmapOpen(true)}
               onAbrirHorarios={() => setIsHorariosOpen(true)}
               onAbrirShare={() => setIsShareOpen(true)}
@@ -292,6 +309,7 @@ export default function App() {
         onClose={() => setIsShareOpen(false)}
         pronosticos={pronosticos}
         estrategiaNombre={nombreEstrategia}
+        semaforoEntropia={semaforoEntropia}
       />
 
       <BetCalculatorModal
