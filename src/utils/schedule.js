@@ -79,6 +79,7 @@ export function calcularTiempoProximoSorteo(fechaReferencia = new Date()) {
 
       return {
         proximoSorteo: item.label,
+        proximoHorario: item.label,
         minutos,
         segundos,
         totalSegundos: diffSegundos,

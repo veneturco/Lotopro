@@ -158,16 +158,20 @@ export default function App() {
     return [...base, ...sorteosHoy];
   }, [resultados, historico]);
 
-  // Información del próximo sorteo en base a la hora actual
-  const infoProximo = useMemo(() => {
-    return calcularTiempoProximoSorteo();
+  // Información del próximo sorteo en base a la hora actual (actualizado dinámicamente)
+  const [infoProximo, setInfoProximo] = useState(() => calcularTiempoProximoSorteo());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setInfoProximo(calcularTiempoProximoSorteo());
+    }, 10000); // Re-evalúa cada 10s el horario próximo
+    return () => clearInterval(timer);
   }, []);
 
   // 3. Pronóstico Estocástico reactivo v2.0 (con Roles Tácticos, Entropía y Auditoría)
   const analisisPredictivo = useMemo(() => {
-    const horaObjetivo = infoProximo?.proximoHorario || null;
+    const horaObjetivo = infoProximo?.proximoHorario || infoProximo?.proximoSorteo || null;
     return obtenerAnalisisCompleto(datosParaPronostico, estrategia, horaObjetivo);
-  }, [datosParaPronostico, estrategia, infoProximo?.proximoHorario]);
+  }, [datosParaPronostico, estrategia, infoProximo?.proximoHorario, infoProximo?.proximoSorteo]);
 
   const pronosticos = analisisPredictivo.top3;
   const semaforoEntropia = analisisPredictivo.semaforoEntropia;
