@@ -116,24 +116,35 @@ export function suscribirUltimosResultados(onUpdate, onError) {
           const esDeHoy = fechaDoc === hoy;
           const list = Array.isArray(data?.resultados) ? data.resultados : [];
 
-          // Preservar el histórico de referencia para el pronóstico
+          // Acumular sorteos nuevos en la memoria evolutiva local (sin duplicados)
           const cacheActual = obtenerDeCacheLocal();
-          let baseHistorica = MOCK_RESULTADOS;
+          const acumuladosPrevios = Array.isArray(cacheActual?.historicoAcumulado)
+            ? cacheActual.historicoAcumulado
+            : (Array.isArray(cacheActual?.historicoReciente) ? cacheActual.historicoReciente : []);
 
-          if (list.length > 0) {
-            baseHistorica = list;
-          } else if (cacheActual?.historicoReciente?.length > 0) {
-            baseHistorica = cacheActual.historicoReciente;
-          }
+          const mapaUnico = new Map();
+          acumuladosPrevios.forEach(item => {
+            const key = item?.time_schedule || `${item?.date_result || ""}_${item?.time_s || ""}`;
+            if (key) mapaUnico.set(key, item);
+          });
+          list.forEach(item => {
+            const key = item?.time_schedule || `${item?.date_result || fechaDoc}_${item?.time_s || ""}`;
+            if (key) mapaUnico.set(key, item);
+          });
+
+          // Mantener hasta los últimos 1.500 sorteos acumulados (~125 días de experiencia extra)
+          const historicoAcumulado = Array.from(mapaUnico.values()).slice(-1500);
+          const baseHistorica = historicoAcumulado.length > 0 ? historicoAcumulado : MOCK_RESULTADOS;
 
           // Si el documento en Firestore es de ayer, para la UI hoy arranca limpio (esperando aperturas)
           const sorteosHoyParaUI = esDeHoy ? list : [];
 
-          // Guardar estado consolidado del día
+          // Guardar estado consolidado y memoria evolutiva
           guardarEnCacheLocal({
             fecha: hoy,
             resultadosHoy: sorteosHoyParaUI,
-            historicoReciente: baseHistorica
+            historicoReciente: baseHistorica,
+            historicoAcumulado: historicoAcumulado
           });
 
           onUpdate({

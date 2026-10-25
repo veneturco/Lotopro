@@ -143,23 +143,30 @@ export default function App() {
     });
   }, [resultados]);
 
-  // Base de datos completa para el motor predictivo:
-  // Combina el histórico real base (468 sorteos) + los sorteos en vivo de hoy sin duplicados
+  // Base de datos completa para el motor predictivo (Memoria Evolutiva):
+  // Combina los 468 sorteos reales base + el histórico acumulado en caché/Firestore + los sorteos en vivo de hoy
   const datosParaPronostico = useMemo(() => {
     const sorteosHoy = Array.isArray(resultados) ? resultados : [];
+    const sorteosAcumulados = Array.isArray(historico) ? historico : [];
     const base = Array.isArray(HISTORICO_BASE) && HISTORICO_BASE.length > 0
       ? HISTORICO_BASE
-      : (Array.isArray(historico) && historico.length > 0 ? historico : MOCK_RESULTADOS);
+      : MOCK_RESULTADOS;
 
-    if (sorteosHoy.length === 0) {
-      return base;
-    }
+    const mapaUnico = new Map();
+    base.forEach(item => {
+      const k = item?.time_schedule || `${item?.date_result || ""}_${item?.time_s || ""}`;
+      if (k) mapaUnico.set(k, item);
+    });
+    sorteosAcumulados.forEach(item => {
+      const k = item?.time_schedule || `${item?.date_result || ""}_${item?.time_s || ""}`;
+      if (k) mapaUnico.set(k, item);
+    });
+    sorteosHoy.forEach(item => {
+      const k = item?.time_schedule || `${item?.date_result || ""}_${item?.time_s || ""}`;
+      if (k) mapaUnico.set(k, item);
+    });
 
-    // Deduplicación por clave única time_schedule (fecha + hora)
-    const vistos = new Set(base.map(item => item.time_schedule).filter(Boolean));
-    const nuevos = sorteosHoy.filter(item => !item.time_schedule || !vistos.has(item.time_schedule));
-
-    return [...base, ...nuevos];
+    return Array.from(mapaUnico.values());
   }, [resultados, historico]);
 
   // Información del próximo sorteo en base a la hora actual (actualizado dinámicamente)
