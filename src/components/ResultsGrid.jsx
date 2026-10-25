@@ -3,8 +3,11 @@ import { Clock } from "lucide-react";
 import AnimalAvatar from "./AnimalAvatar";
 import { resolverAnimal } from "../constants/catalogo";
 
-export default function ResultsGrid({ resultados = [] }) {
-  if (!resultados || resultados.length === 0) {
+export default function ResultsGrid({ resultados = [], historicoAyer = [], esAperturaMatutina = false }) {
+  const listaMostrar = (!resultados || resultados.length === 0) ? (historicoAyer || []) : resultados;
+  const esModoAyer = (!resultados || resultados.length === 0) && listaMostrar.length > 0;
+
+  if (!listaMostrar || listaMostrar.length === 0) {
     return (
       <div className="rounded-3xl bg-white/40 dark:bg-neutral-900/50 border border-white/50 dark:border-neutral-800 p-6 text-center space-y-2.5 backdrop-blur-md shadow-lg">
         <div className="inline-flex p-3 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
@@ -29,17 +32,27 @@ export default function ResultsGrid({ resultados = [] }) {
 
   return (
     <div className="space-y-3">
+      {/* Banner Informativo si estamos antes de las 8:00 AM */}
+      {esModoAyer && (
+        <div className="flex items-center space-x-2.5 p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs shadow-sm">
+          <Clock className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 animate-pulse" />
+          <p className="flex-1 leading-snug">
+            <strong>Esperando sorteo de las 08:00 AM.</strong> Mostrando la secuencia completa del día anterior como referencia estadística.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-1">
-        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-800">
-          Sorteos del Día ({resultados.length})
+        <h3 className="text-xs font-black uppercase tracking-wider text-neutral-800 dark:text-neutral-200">
+          {esModoAyer ? `Últimos Sorteos Registrados (${listaMostrar.length})` : `Sorteos del Día (${listaMostrar.length})`}
         </h3>
-        <span className="text-[11px] text-neutral-600 font-semibold">
+        <span className="text-[11px] text-neutral-600 dark:text-neutral-400 font-semibold">
           Más reciente arriba
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-3.5">
-        {resultados.map((item, index) => {
+        {[...listaMostrar].reverse().map((item, index) => {
           const animal = resolverAnimal(item);
           const badgeColorClass =
             colorBadgeStyles[animal?.color] || "bg-neutral-800 text-white";

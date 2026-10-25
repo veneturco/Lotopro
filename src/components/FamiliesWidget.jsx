@@ -2,8 +2,8 @@ import React, { useMemo } from "react";
 import { Users, TrendingUp, Sparkles } from "lucide-react";
 import { CATALOGO_ANIMALES, FAMILIAS_TRADICIONALES, resolverAnimal } from "../constants/catalogo";
 
-export default function FamiliesWidget({ resultados = [] }) {
-  // Cuenta cuántos animales de cada familia han salido en los sorteos de hoy
+export default function FamiliesWidget({ resultados = [], esHistorico = false }) {
+  // Cuenta cuántos animales de cada familia han salido
   const estadisticas = useMemo(() => {
     const conteos = {
       Plumas: 0,
@@ -58,10 +58,10 @@ export default function FamiliesWidget({ resultados = [] }) {
           </div>
           <div>
             <h3 className="text-xs font-black tracking-tight text-neutral-900 dark:text-white uppercase">
-              Radar de Familias del Día
+              {esHistorico ? "Radar de Familias (Histórico)" : "Radar de Familias del Día"}
             </h3>
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
-              Agrupación por linaje tradicional de Loto Activo
+              {esHistorico ? "Distribución en 1.416 sorteos reales" : "Agrupación por linaje tradicional de Loto Activo"}
             </p>
           </div>
         </div>

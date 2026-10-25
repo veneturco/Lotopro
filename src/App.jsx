@@ -286,11 +286,15 @@ export default function App() {
               onAbrirCarton={() => setIsCartonOpen(true)}
             />
 
-            {/* Radar de Familias y Linajes Tradicionales */}
-            <FamiliesWidget resultados={datosParaPronostico} />
+            {/* Radar de Familias y Linajes Tradicionales (del Día o del Histórico) */}
+            <FamiliesWidget resultados={resultadosUI.length > 0 ? resultadosUI : datosParaPronostico} esHistorico={resultadosUI.length === 0} />
 
-            {/* Sección Histórica: Sorteos del Día */}
-            <ResultsGrid resultados={resultadosUI} />
+            {/* Sección Histórica: Sorteos del Día (o Cierre del Día Anterior si aún no hay sorteos hoy) */}
+            <ResultsGrid
+              resultados={resultadosUI}
+              historicoAyer={datosParaPronostico.slice(-12)}
+              esAperturaMatutina={esAperturaMatutina}
+            />
           </>
         )}
 
