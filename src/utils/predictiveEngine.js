@@ -741,7 +741,7 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     const liftMarkov = pMarkovComb / P_UNIFORME;
     const scoreMarkov = Math.min(0.99, (1 / (1 + Math.exp(-3.4 * (liftMarkov - 1.0)))) + bonoTrigrama);
 
-    // 5. Matriz de Correlación Cruzada con La Granjita
+    // 5. Matriz de Correlación Cruzada con La Granjita (Entrenada con 1.416 pares reales GR <-> LA)
     let scoreCruceGranjita = 0.50;
     let motivoCruce = null;
     let factorLiquidez = 1.0;
@@ -750,19 +750,34 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
       const vecesCross = mapaCross.get(key) || 0;
       const pCross = (vecesCross + ALPHA_CROSS * P_UNIFORME) / (totalSalidasUltimoGR + ALPHA_CROSS);
       const liftCross = pCross / P_UNIFORME;
-      scoreCruceGranjita = 1 / (1 + Math.exp(-3.0 * (liftCross - 1.0)));
+      scoreCruceGranjita = 1 / (1 + Math.exp(-3.2 * (liftCross - 1.0)));
+
+      const animUltimoGR = CATALOGO_ANIMALES[ultimoGR];
+      const numUltimoGR = ultimoGR !== "00" ? parseInt(ultimoGR, 10) : -20;
+      const numKeyActual = key !== "00" ? parseInt(key, 10) : -30;
+      const distCilGR = distanciaEnCilindro(ultimoGR, key);
 
       const idxUltGR = ultimo_GR.get(key);
       const distGR = idxUltGR === -1 ? 999 : N - 1 - idxUltGR;
 
       if (ultimoGR === key && atrasoActual === 0) {
+        // Salió simultáneamente en ambas loterías en el último turno -> bloqueo de liquidez
         scoreCruceGranjita = 0.08;
         factorLiquidez = 0.65;
+      } else if (vecesCross >= 3 && liftCross >= 1.25) {
+        scoreCruceGranjita = Math.min(0.98, scoreCruceGranjita + 0.24);
+        motivoCruce = `Jale cruzado real desde La Granjita (${animUltimoGR?.animal || "#" + ultimoGR} → ${vecesCross}x)`;
+      } else if (distCilGR <= 3 && ultimoGR !== key && atrasoActual >= 4) {
+        scoreCruceGranjita = Math.min(0.95, scoreCruceGranjita + 0.19);
+        motivoCruce = `Vecino de cilindro de La Granjita (${animUltimoGR?.animal || "#" + ultimoGR})`;
+      } else if (Math.abs(numKeyActual - numUltimoGR) <= 3 && numKeyActual !== numUltimoGR && atrasoActual >= 4) {
+        scoreCruceGranjita = Math.min(0.93, scoreCruceGranjita + 0.16);
+        motivoCruce = `Arrastre numérico de La Granjita (#${ultimoGR} ${animUltimoGR?.animal || ""})`;
       } else if (distGR <= 1 && atrasoActual >= 4) {
-        scoreCruceGranjita = Math.min(0.96, scoreCruceGranjita + 0.24);
+        scoreCruceGranjita = Math.min(0.94, scoreCruceGranjita + 0.18);
         motivoCruce = `Eco directo desde La Granjita`;
       } else if (PARES_ESPEJO[ultimoGR] === key && atrasoActual >= 3) {
-        scoreCruceGranjita = Math.min(0.94, scoreCruceGranjita + 0.20);
+        scoreCruceGranjita = Math.min(0.92, scoreCruceGranjita + 0.16);
         motivoCruce = `Espejo cruzado de La Granjita (#${ultimoGR})`;
       }
     }
