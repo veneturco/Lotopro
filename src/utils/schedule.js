@@ -13,6 +13,8 @@ export const HORARIOS_OFICIALES = [
   { hora: 11, minuto: 0, label: "11:00 AM", valor24: "11:00" },
   { hora: 12, minuto: 0, label: "12:00 PM", valor24: "12:00" },
   { hora: 13, minuto: 0, label: "01:00 PM", valor24: "13:00" },
+  { hora: 14, minuto: 0, label: "02:00 PM", valor24: "14:00" },
+  { hora: 15, minuto: 0, label: "03:00 PM", valor24: "15:00" },
   { hora: 16, minuto: 0, label: "04:00 PM", valor24: "16:00" },
   { hora: 17, minuto: 0, label: "05:00 PM", valor24: "17:00" },
   { hora: 18, minuto: 0, label: "06:00 PM", valor24: "18:00" },
