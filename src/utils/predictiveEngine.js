@@ -98,29 +98,29 @@ export const ESTRATEGIAS = Object.freeze({
     descripcion: "Algoritmo Quant auto-adaptativo con Simulación Monte Carlo y Walk-Forward 48h",
     icono: "Sparkles",
     pesos: {
-      frecuencia: 0.21,
-      atraso: 0.21,
-      markov: 0.20,
-      cruceGranjita: 0.10,
-      leyTercio: 0.10,
-      colorFamilia: 0.09,
-      horario: 0.09
+      frecuencia: 0.34,
+      atraso: 0.22,
+      markov: 0.22,
+      cruceGranjita: 0.08,
+      leyTercio: 0.06,
+      colorFamilia: 0.04,
+      horario: 0.04
     },
     vidaMedia: 22
   },
   equilibrado: {
     id: "equilibrado",
     nombre: "Equilibrado",
-    descripcion: "Balance cuántico entre N-Gramas, resonancia circadiana, Markov y atrasos",
+    descripcion: "Balance cuántico óptimo (Markov M2 dominante, frecuencia activa y ventana harmónica)",
     icono: "Scale",
     pesos: {
-      frecuencia: 0.22,
+      frecuencia: 0.35,
       atraso: 0.22,
-      markov: 0.19,
-      cruceGranjita: 0.10,
-      leyTercio: 0.10,
-      colorFamilia: 0.08,
-      horario: 0.09
+      markov: 0.24,
+      cruceGranjita: 0.07,
+      leyTercio: 0.05,
+      colorFamilia: 0.04,
+      horario: 0.03
     },
     vidaMedia: 24
   },
@@ -737,7 +737,7 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     const vecesTrigrama = trigramas_LA.get(key) || 0;
     const bonoTrigrama = vecesTrigrama > 0 ? Math.min(0.22, vecesTrigrama * 0.11) : 0;
 
-    const pMarkovComb = 0.50 * pMarkov1 + 0.25 * pMarkov2 + 0.25 * pMarkov12;
+    const pMarkovComb = 0.20 * pMarkov1 + 0.60 * pMarkov2 + 0.10 * pMarkov12 + 0.10 * P_UNIFORME;
     const liftMarkov = pMarkovComb / P_UNIFORME;
     const scoreMarkov = Math.min(0.99, (1 / (1 + Math.exp(-3.4 * (liftMarkov - 1.0)))) + bonoTrigrama);
 
@@ -985,11 +985,12 @@ export function obtenerAnalisisCompleto(historialResultados = [], estrategiaId =
     ...defensaCand
   };
 
+  // Batacazo: Resonancia madura (ventana de aceleración de 12 a 24 sorteos) o mayor atraso con probabilidad latente
   const poolBatacazo = scores
-    .slice(1, 12)
+    .slice(1, 10)
     .filter(c => c.numero !== fijo.numero && c.numero !== defensa.numero);
-  poolBatacazo.sort((a, b) => b.atrasoSorteos - a.atrasoSorteos);
-  const batacazoCand = poolBatacazo[0] || scores[2];
+  const enResonancia = poolBatacazo.find(c => c.atrasoSorteos >= 12 && c.atrasoSorteos <= 24);
+  const batacazoCand = enResonancia || poolBatacazo[0] || scores[2];
 
   const batacazo = {
     posicion: 3,
